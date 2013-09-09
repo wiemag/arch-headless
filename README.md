@@ -5,20 +5,25 @@ Install archlinux on your headless machine.
 
 
 APPLICATION
+
 The script is written with just one purpose in mind:  Installation of archlinux on a headless server/computer, using a SSH connection.
 
 
 REQUIREMENTS
+
 - The headless computer/server has to boot from a CD/DVD.
 - The headless computer/server connects automatically to the local network.
 - The computer using the arch-headless script needs to have systemd installed.
 
 
 INSTALLATION
+
 No installation needed.
 
 
 DEPENDENCIES
-squachfs-tools (cammands: unsquashfs, mksquashfs)
-cdrkit         (command:  genisoimage)
-sed            (command:  sed)
+
+- squachfs-tools (cammands: unsquashfs, mksquashfs)
+- cdrkit         (command:  genisoimage)
+- sed            (command:  sed)
+- coreutils      (command:  wc)
