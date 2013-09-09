@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-
+# by wm/wiemag/dif 2013-09-09
 # ---==== INSTALL ARCH LINUX ON A HEADLESS SERVER ====-------------------------
 # How to remaster arch.iso image so that it starts automatically, allowing an ssh-administered ("blind") installation of a headless server.
 # Assumptions about the computer system arch linux will be installed on:
