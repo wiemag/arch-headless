@@ -7,22 +7,33 @@
 # - it is connected to the local network
 # Currently, the official installation media start with the ssh daemon down.
 # v0.95 first published
-# v0.96 check if squashfs-toos are installed; if not, ask whether to install
+# v0.96 check if squashfs-toosi and cdrkit are installed; If not, ask whether to install.
 
 VERSION=0.96
 
+# Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
-	echo "The squashfs-tools package is missing."
+	echo "The squashfs-tools package is needed."
 	read -n1 -sp "Install? (y/N) " INST 
-	if [[ ${INST/y/Y} = "Y" ]]; then
-		echo -e "\r\e[32;1msudo pacman -S squashfs-tools\e[0m"
-		sudo pacman -S squashfs-tools
-	else
-		echo -e "\rCome back when you are ready."
-		exit
-	fi
+	[[ ${INST/y/Y} = "Y" ]] && { PKGS="squashfs-tools"; echo -ne "\r";} || \
+		{ echo -e "\rCome back when you are ready."; exit;}
 fi
 
+if [ -z $(which genisoimage) ]; then
+	echo -n "The cdrkit package missing"
+	(( ${#PKGS} )) && echo ", too." || echo "."
+	read -n1 -sp "Install? (y/N) " INST 
+	[[ ${INST/y/Y} = "Y" ]] && { PKGS=${PKGS- }" cdrkit"; PKGS=${PKGS/#  /};} || \
+		{ echo -e "\rCome back when you are ready."; exit;}
+fi
+
+# Installing missing dependencies ---------------
+if [[ ${#PKGS} -gt 0 ]]; then
+	echo -e "\r\e[32;1msudo pacman -S ${PKGS}\e[0m"
+	sudo pacman -S ${PKGS}
+fi
+
+# Declarations and initialisation ---------------
 function usage() {
 	echo -e "\n\e[1march-headless [ -a 32 | 64 ] arch.iso | -h\e[0m\n"
 	echo -e "\tarch.iso - path to arch-install-media.iso"
@@ -53,6 +64,8 @@ else
 	echo -e "\e[31;1m${ISO}\e[0m not found."
 	exit 1
 fi
+
+# START -----------------------------------------
 
 [[ -d /mnt/archiso ]] || sudo mkdir /mnt/archiso
 [[ -d /mnt/rootfs ]] || sudo mkdir /mnt/rootfs
