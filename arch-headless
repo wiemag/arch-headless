@@ -6,8 +6,22 @@
 # - it boots from a CD/DVD first
 # - it is connected to the local network
 # Currently, the official installation media start with the ssh daemon down.
+# v0.95 first published
+# v0.96 check if squashfs-toos are installed; if not, ask whether to install
 
-VERSION=0.95
+VERSION=0.96
+
+if [ -z $(which unsquashfs) ]; then
+	echo "The squashfs-tools package is missing."
+	read -n1 -sp "Install? (y/N) " INST 
+	if [[ ${INST/y/Y} = "Y" ]]; then
+		echo -e "\r\e[32;1msudo pacman -S squashfs-tools\e[0m"
+		sudo pacman -S squashfs-tools
+	else
+		echo -e "\rCome back when you are ready."
+		exit
+	fi
+fi
 
 function usage() {
 	echo -e "\n\e[1march-headless [ -a 32 | 64 ] arch.iso | -h\e[0m\n"
@@ -22,21 +36,21 @@ while getopts  ":a:hv" flag
 do
     case "$flag" in
 		h) usage && exit;;
-		v) echo -e "\n${0##*/} v.${VERSION}"; usage; exit;;
+		v) echo -e "\n${0##*/} v.${VERSION}"; exit;;
 		a) ARCH="$OPTARG";;
 	esac
 done
 
 # Remove the options parsed above.
 shift `expr $OPTIND - 1`
-ISO="$1"		# Path/ name of the official arch installation iso image
-
+ISO="$1"		# Path/name of the official arch installation iso image
+((${#ISO})) || { usage; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
 if [ -f "$ISO" ]; then
 	path=${ISO%/*}
 	[[ -z $path ]] && path=$(pwd)
 else
 	usage
-	echo -e "\e[32;1m\"arch-installation-media.iso\" not found.\e[0m"
+	echo -e "\e[31;1m${ISO}\e[0m not found."
 	exit 1
 fi
 
