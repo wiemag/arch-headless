@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# by wm/wiemag/dif 2013-09-09
+# by wm/wiemag/dif, original date 2013-09-09
 # ---==== INSTALL ARCH LINUX ON A HEADLESS SERVER ====-------------------------
 # How to remaster arch.iso image so that it starts automatically, allowing an ssh-administered ("blind") installation of a headless server.
 # Assumptions about the computer system arch linux will be installed on:
@@ -7,9 +7,10 @@
 # - it is connected to the local network
 # Currently, the official installation media start with the ssh daemon down.
 # v0.95 first published
-# v0.96 check if squashfs-toosi and cdrkit are installed; If not, ask whether to install.
+# v0.96 check if squashfs-tools and cdrkit are installed; If not, ask whether to install.
+# v0.97 unnecessary-architecture file system removed from iso image
 
-VERSION=0.96
+VERSION=0.97
 
 # Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
@@ -85,6 +86,15 @@ LINUX boot/${ARCH}/vmlinuz\nINITRD boot/${ARCH}/archiso.img
 APPEND archisobasedir=arch archisolabel=ARCH_$(date +%Y%m)" > \
 	"$path"/archiso/arch/boot/syslinux/archiso.cfg
 
+echo "Removing unnecessary architecture files"
+if [[ $ARCH = "i686" ]]; then 
+	echo -e "\tdeleting *x86_64* files and folders"
+	rm -r "$path"/archiso/arch/{*x86_64*,/boot/x86_64}
+else
+	echo -e "\tdeleting *x686* files and folders"
+	rm -r "$path"/archiso/arch/{*i686*,/boot/i686}
+fi
+
 echo "Modifying ...archiso/arch/${ARCH}/root-image.fs.sfs"
 echo -e "\tto start sshd.service at boot."
 
@@ -115,9 +125,9 @@ mv -f /tmp/root-image.fs.sfs "${path}/archiso/arch/${ARCH}/root-image.fs.sfs"
 # Create a modified arch-installation-media.iso
 genisoimage -l -r -J -V "ARCH_$(date +%Y%m)" -b isolinux/isolinux.bin \
 	-no-emul-boot -boot-load-size 4 -boot-info-table -c isolinux/boot.cat \
-	-o "${path}/arch-$(date +%y.%m.%d-%H%M)-custom.iso" "${path}/archiso"
+	-o "${path}/arch-${ARCH}-$(date +%Y%m%d-%H%M).iso" "${path}/archiso"
 (($?)) || \
-	echo -e "\e[32;1m${path}/arch-$(date +%y.%m.%d-%H%M)-custom.iso\e[0m has been created."
+	echo -e "\e[32;1m${path}/arch-${ARCH}-$(date +%Y%m%d-%H%M).iso\e[0m has been created."
 echo -n "Cleaning... "
 sudo umount /mnt/archiso
 rm -r "${path}/archiso-${ARCH}-rootfs"
