@@ -9,8 +9,9 @@
 # v0.95 first published
 # v0.96 check if squashfs-tools and cdrkit are installed; If not, ask whether to install.
 # v0.97 unnecessary-architecture file system removed from iso image
+# v0.98 fix: path=[[ -z "$path" || "$path" == "$ISO" ]] &&...
 
-VERSION=0.97
+VERSION=0.98
 
 # Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
@@ -59,7 +60,7 @@ ISO="$1"		# Path/name of the official arch installation iso image
 ((${#ISO})) || { usage; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
 if [ -f "$ISO" ]; then
 	path=${ISO%/*}
-	[[ -z $path ]] && path=$(pwd)
+	[[ -z "$path" || "$path" == "$ISO" ]] && path=$(pwd)
 else
 	usage
 	echo -e "\e[31;1m${ISO}\e[0m not found."
