@@ -10,8 +10,9 @@
 # v0.96 check if squashfs-tools and cdrkit are installed; If not, ask whether to install.
 # v0.97 unnecessary-architecture file system removed from iso image
 # v0.98 fix: path=[[ -z "$path" || "$path" == "$ISO" ]] &&...
+# v0.99 -f added to one of the cleaning rm commands
 
-VERSION=0.98
+VERSION=0.99
 
 # Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
@@ -132,7 +133,7 @@ genisoimage -l -r -J -V "ARCH_$(date +%Y%m)" -b isolinux/isolinux.bin \
 echo -n "Cleaning... "
 sudo umount /mnt/archiso
 rm -r "${path}/archiso-${ARCH}-rootfs"
-rm -r "${path}/archiso"
+rm -rf "${path}/archiso" 	# -f required to remove archiso/isolinux/boot.cat
 sudo rm -r /mnt/archiso
 sudo rm -r /mnt/rootfs
 echo "Done."
