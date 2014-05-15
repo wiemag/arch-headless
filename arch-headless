@@ -11,8 +11,10 @@
 # v0.97 unnecessary-architecture file system removed from iso image
 # v0.98 fix: path=[[ -z "$path" || "$path" == "$ISO" ]] &&...
 # v0.99 -f added to one of the cleaning rm commands
+# v1.00 enable braking and resuming the script to allow manual modifications
+#
 
-VERSION=0.99
+VERSION=1.00
 
 # Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
@@ -42,98 +44,147 @@ function usage() {
 	echo -e "\tarch.iso - path to arch-install-media.iso"
 	echo -e "\t           e.g. archlinux-2013.09.01-dual.iso"
 	echo -e "\t           or /path/to/archlinux-2013.09.01-dual.iso"
-	echo -e "\t-a 32 - install a 32-bit system (default)"
-	echo -e "\t-a 64 - install a 64-bit system\n"
+	echo -e "\t-a 32 - create iso for a 32-bit system (default)"
+	echo -e "\t-a 64 - create iso for a 64-bit system"
+	echo -e "\t-b    - break/halt this script to allow manual modification in chroot"
+	echo -e "\t-c    - give up the halted task (-b) and clean the files\n"
 }
 
-while getopts  ":a:hv" flag
+function basepath () {
+	local PATH p
+	PATH=${1-.}
+	[[ -z ${PATH%%/*} ]] || PATH="$(pwd)/$PATH"
+	while [[ $PATH == */./* ]]; do PATH=${PATH//\/\.\///}; done
+	PATH=${PATH//\/\//\/} 		# Remove //
+	while [[ "$PATH" == *..* ]]; do
+		p=${PATH%%\/\.\.*}; p=${p%/*}
+		PATH=${p}${PATH#*\.\.}
+	done
+	PATH=${PATH%/*} 			# Remove last tier name
+	[[ -z $PATH ]] && PATH='/'
+	echo "$PATH"
+}
+
+# If -b is used, a /mnt/archiso-${USER}-params is created.
+
+ARCH='i686'			# A 32-bit system as the default one.
+BREAK=0 			# BREAK/HALT the script
+CLEAN=0 			# DO NOT RESUME the script and REMOVE FILES instead.
+
+while getopts  ":a:bchv" flag
 do
     case "$flag" in
 		h) usage && exit;;
 		v) echo -e "\n${0##*/} v.${VERSION}"; exit;;
-		a) ARCH="$OPTARG";;
+		a) ARCH="$OPTARG"; [[ $ARCH -lt 50 ]] && ARCH="i686" || ARCH="x86_64";;
+		b) BREAK=1;;
+		c) CLEAN=1;;
 	esac
 done
 
-# Remove the options parsed above.
-shift `expr $OPTIND - 1`
-ISO="$1"		# Path/name of the official arch installation iso image
-((${#ISO})) || { usage; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
-if [ -f "$ISO" ]; then
-	path=${ISO%/*}
-	[[ -z "$path" || "$path" == "$ISO" ]] && path=$(pwd)
+if [[ ! -f /mnt/archiso-${USER}-params ]]
+then 	# Assume that BREAK was used in the previous run, and resume the script.
+	 	# Options are ignored if BREAK was used in previous run.
+	CLEAN=0 	# Even if -c flag has been invoked
+	# Remove the options parsed above.
+	shift `expr $OPTIND - 1`
+	ISO="$1"		# Path/name of the official arch installation iso image
+	((${#ISO})) || { usage; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
+	if [ -f "$ISO" ]; then
+		path=$(basepath $ISO)
+		ISO=${path}/${ISO##*/}
+	else
+		usage
+		echo -e "\e[31;1m${ISO}\e[0m not found."
+		exit 1
+	fi
+
+	# START -----------------------------------------
+
+	[[ -d "/mnt/archiso-$USER" ]] || sudo mkdir "/mnt/archiso-$USER"
+	[[ -d "/mnt/rootfs-$USER" ]] || sudo mkdir "/mnt/rootfs-$USER"
+	(( $(echo $(grep "/mnt/archiso-$USER" /etc/mtab)|wc -w) )) || \
+		sudo mount -t iso9660 -o loop "$ISO" "/mnt/archiso-$USER" 2>/dev/null
+	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
+	cp -ap "/mnt/archiso-$USER/" "${path}/archiso/"
+
+	echo "Modifying archiso/arch/boot/syslinux/archiso.cfg"
+	echo -e "\tto log in automatically."
+
+	sudo echo -e "PROMPT 0\nDEFAULT arch-${ARCH}\nLABEL arch-${ARCH}
+	LINUX boot/${ARCH}/vmlinuz\nINITRD boot/${ARCH}/archiso.img
+	APPEND archisobasedir=arch archisolabel=ARCH_$(date +%Y%m)" > \
+		"$path"/archiso/arch/boot/syslinux/archiso.cfg
+
+	echo "Removing unnecessary architecture files"
+	if [[ $ARCH = "i686" ]]; then 
+		echo -e "\tdeleting *x86_64* files and folders"
+		rm -r "$path"/archiso/arch/{*x86_64*,/boot/x86_64}
+	else
+		echo -e "\tdeleting *x686* files and folders"
+		rm -r "$path"/archiso/arch/{*i686*,/boot/i686}
+	fi
+
+	echo "Modifying ...archiso/arch/${ARCH}/root-image.fs.sfs"
+	echo -e "\tto start sshd.service at boot."
+
+	cp -a /mnt/archiso-$USER/arch/${ARCH}/root-image.fs.sfs /tmp/
+	# Install package 'squashfs-tools'
+	unsquashfs -d "$path/archiso-${ARCH}-rootfs" /tmp/root-image.fs.sfs
+	rm /tmp/root-image.fs.sfs
+	(( $(echo $(grep /mnt/rootfs-$USER /etc/mtab)|wc -w) )) || \
+		sudo mount "$path/archiso-${ARCH}-rootfs/root-image.fs" /mnt/rootfs-$USER
+
+	if (($BREAK)); then
+		echo -e "\e[32m"
+		echo "ARCH=$ARCH" | sudo tee /mnt/archiso-${USER}-params
+		echo "path=$path" | sudo tee -a /mnt/archiso-${USER}-params
+		echo "ISO=$ISO" | sudo tee -a /mnt/archiso-${USER}-params
+		echo -e "\e[1mScript halted.\e[0m"
+		echo -e "\e[1mroot-image.fs \e[0mmounted on\e[1m /mnt/rootfs-$USER\e[0m"
+		exit
+	fi
+
 else
-	usage
-	echo -e "\e[31;1m${ISO}\e[0m not found."
-	exit 1
+	echo -e "\e[32mDirectory /mnt/archiso-$USER-params found."
+	echo The use of -b option assumed in the previous run.
+	source /mnt/archiso-$USER-params
 fi
-
-# START -----------------------------------------
-
-[[ -d /mnt/archiso ]] || sudo mkdir /mnt/archiso
-[[ -d /mnt/rootfs ]] || sudo mkdir /mnt/rootfs
-(( $(echo $(grep /mnt/archiso /etc/mtab)|wc -w) )) || \
-	sudo mount -t iso9660 -o loop "$ISO" /mnt/archiso
-echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
-cp -a /mnt/archiso "$path"/
-
-echo "Modifying /mnt/archiso/arch/boot/syslinux/archiso.cfg"
-echo -e "\tto log in automatically."
-
-ARCH=${ARCH-32}					# A 32-bit sistem as the default one.
-[[ $ARCH -lt 50 ]] && ARCH="i686" || ARCH="x86_64"
-
-sudo echo -e "PROMPT 0\nDEFAULT arch-${ARCH}\nLABEL arch-${ARCH}
-LINUX boot/${ARCH}/vmlinuz\nINITRD boot/${ARCH}/archiso.img
-APPEND archisobasedir=arch archisolabel=ARCH_$(date +%Y%m)" > \
-	"$path"/archiso/arch/boot/syslinux/archiso.cfg
-
-echo "Removing unnecessary architecture files"
-if [[ $ARCH = "i686" ]]; then 
-	echo -e "\tdeleting *x86_64* files and folders"
-	rm -r "$path"/archiso/arch/{*x86_64*,/boot/x86_64}
-else
-	echo -e "\tdeleting *x686* files and folders"
-	rm -r "$path"/archiso/arch/{*i686*,/boot/i686}
-fi
-
-echo "Modifying ...archiso/arch/${ARCH}/root-image.fs.sfs"
-echo -e "\tto start sshd.service at boot."
-
-cp -a /mnt/archiso/arch/${ARCH}/root-image.fs.sfs /tmp/
-# Install package 'squashfs-tools'
-unsquashfs -d "$path/archiso-${ARCH}-rootfs" /tmp/root-image.fs.sfs
-rm /tmp/root-image.fs.sfs
-(( $(echo $(grep /mnt/rootfs /etc/mtab)|wc -w) )) || \
-	sudo mount "$path/archiso-${ARCH}-rootfs/root-image.fs" /mnt/rootfs
 #--------------------------------------------------------------------
 # Copy the 'arch-chroot' script to your computer. It comes in handy.
+# arch-chroot is awailable in package extra/arch-install-scripts.
 #cp -f /mnt/rootfs/usr/bin/arch-chroot "$path"/
 #sudo chmod a+x "${path}/arch-chroot"
 #--------------------------------------------------------------------
 
-# Warunek:  Czy istnieje /usr/lib/systemd/system/sshd.service?
-# Tak, pod archlinuksem istnieje!
-sudo ln -s /usr/lib/systemd/system/sshd.service /mnt/rootfs/etc/systemd/system/multi-user.target.wants/
+if [[ $CLEAN -eq 0 ]]; then
+	echo -e "\e[1mIgnoring parameters and resuming the script with previous ones.\e[0m"
 
-# Allow empty passwords for sshd
-sudo sed -i 's/#PermitEmpty.*/PermitEmptyPasswords yes/;' /mnt/rootfs/etc/ssh/sshd_config
+	# Warunek:  Czy istnieje /usr/lib/systemd/system/sshd.service?
+	# Tak, pod archlinuksem istnieje!
+	# Mało eleganckie ale skuteczne.
+	# Elegancko byłoby wypakować
+	sudo ln -s /usr/lib/systemd/system/sshd.service /mnt/rootfs-$USER/etc/systemd/system/multi-user.target.wants/
 
-# Squash rootfs back
-sudo umount /mnt/rootfs
-mksquashfs "${path}/archiso-${ARCH}-rootfs" /tmp/root-image.fs.sfs
-mv -f /tmp/root-image.fs.sfs "${path}/archiso/arch/${ARCH}/root-image.fs.sfs"
+	# Allow empty passwords for sshd
+	sudo sed -i 's/#PermitEmpty.*/PermitEmptyPasswords yes/;' /mnt/rootfs-$USER/etc/ssh/sshd_config
 
-# Create a modified arch-installation-media.iso
-genisoimage -l -r -J -V "ARCH_$(date +%Y%m)" -b isolinux/isolinux.bin \
-	-no-emul-boot -boot-load-size 4 -boot-info-table -c isolinux/boot.cat \
-	-o "${path}/arch-${ARCH}-$(date +%Y%m%d-%H%M).iso" "${path}/archiso"
-(($?)) || \
-	echo -e "\e[32;1m${path}/arch-${ARCH}-$(date +%Y%m%d-%H%M).iso\e[0m has been created."
+	# Squash rootfs back
+	mksquashfs "${path}/archiso-${ARCH}-rootfs" /tmp/root-image.fs.sfs
+	mv -f /tmp/root-image.fs.sfs "${path}/archiso/arch/${ARCH}/root-image.fs.sfs"
+
+	# Create a modified arch-installation-media.iso
+	genisoimage -l -r -J -V "ARCH_$(date +%Y%m)" -b isolinux/isolinux.bin \
+		-no-emul-boot -boot-load-size 4 -boot-info-table -c isolinux/boot.cat \
+		-o "${path}/arch-${ARCH}-$(date +%Y%m%d-%H%M).iso" "${path}/archiso"
+	(($?)) || \
+		echo -e "\e[32;1m${path}/arch-${ARCH}-$(date +%Y%m%d-%H%M).iso\e[0m has been created."
+fi
 echo -n "Cleaning... "
-sudo umount /mnt/archiso
+sudo umount /mnt/rootfs-$USER
+sudo umount /mnt/archiso-$USER
 rm -r "${path}/archiso-${ARCH}-rootfs"
 rm -rf "${path}/archiso" 	# -f required to remove archiso/isolinux/boot.cat
-sudo rm -r /mnt/archiso
-sudo rm -r /mnt/rootfs
+sudo rm -r /mnt/archiso-${USER}*
+sudo rm -r /mnt/rootfs-$USER
 echo "Done."
