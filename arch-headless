@@ -7,14 +7,14 @@
 # - it is connected to the local network
 # Currently, the official installation media start with the ssh daemon down.
 # v0.95 first published
-# v0.96 check if squashfs-tools and cdrkit are installed; If not, ask whether to install.
-# v0.97 unnecessary-architecture file system removed from iso image
-# v0.98 fix: path=[[ -z "$path" || "$path" == "$ISO" ]] &&...
-# v0.99 -f added to one of the cleaning rm commands
-# v1.00 enable braking and resuming the script to allow manual modifications
-#
+# v1.00 enable hating/braking and resuming the script to allow manual modifications
+# v1.01 optimisations: less copying, ISO unmounted early
+# Further devel (time permitting) notes:
+# - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
+# - use /tmp (if enough space)
+# - man pages and PKGBUILD; AUR?
 
-VERSION=1.00
+VERSION=1.01
 
 # Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
@@ -65,27 +65,38 @@ function basepath () {
 	echo "$PATH"
 }
 
-# If -b is used, a /mnt/archiso-${USER}-params is created.
+function warn_incompatibility () {
+	if [[ $1 != $(uname -m) ]]; then
+		echo
+		echo "*****************************************************"
+		echo "*  Remember your machine architecture               *"
+		echo "*  is different from that of the ISO being created. *"
+		echo "*****************************************************"
+	fi
+}
 
 ARCH='i686'			# A 32-bit system as the default one.
 BREAK=0 			# BREAK/HALT the script
 CLEAN=0 			# DO NOT RESUME the script and REMOVE FILES instead.
 
+# If -b is used, a /mnt/archiso-${USER}-params is created.
+
+# Parse the command line ------------------------
 while getopts  ":a:bchv" flag
 do
     case "$flag" in
 		h) usage && exit;;
 		v) echo -e "\n${0##*/} v.${VERSION}"; exit;;
-		a) ARCH="$OPTARG"; [[ $ARCH -lt 50 ]] && ARCH="i686" || ARCH="x86_64";;
+		a) [[ "$OPTARG" -gt 49 ]] && ARCH="x86_64";;
 		b) BREAK=1;;
 		c) CLEAN=1;;
 	esac
 done
 
+# Here we go ------------------------------------
 if [[ ! -f /mnt/archiso-${USER}-params ]]
 then 	# Assume that BREAK was used in the previous run, and resume the script.
 	 	# Options are ignored if BREAK was used in previous run.
-	CLEAN=0 	# Even if -c flag has been invoked
 	# Remove the options parsed above.
 	shift `expr $OPTIND - 1`
 	ISO="$1"		# Path/name of the official arch installation iso image
@@ -98,6 +109,10 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 		echo -e "\e[31;1m${ISO}\e[0m not found."
 		exit 1
 	fi
+	if (($CLEAN)); then
+		echo "Ignoring the -c flag - no previous run files found."
+		CLEAN=0
+	fi
 
 	# START -----------------------------------------
 
@@ -107,6 +122,8 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 		sudo mount -t iso9660 -o loop "$ISO" "/mnt/archiso-$USER" 2>/dev/null
 	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
 	cp -ap "/mnt/archiso-$USER/" "${path}/archiso/"
+	sudo umount /mnt/archiso-$USER 		# Not needed any longer
+	sudo rm -r /mnt/archiso-$USER
 
 	echo "Modifying archiso/arch/boot/syslinux/archiso.cfg"
 	echo -e "\tto log in automatically."
@@ -125,15 +142,29 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 		rm -r "$path"/archiso/arch/{*i686*,/boot/i686}
 	fi
 
-	echo "Modifying ...archiso/arch/${ARCH}/root-image.fs.sfs"
-	echo -e "\tto start sshd.service at boot."
+	echo "Unsquashing ...archiso/arch/${ARCH}/root-image.fs.sfs"
+	echo -e "\tto $path/archiso-${ARCH}-rootfs"
+	echo -e "\tand mounting root-image.fs at /mnt/rootfs-${USER}."
 
-	cp -a /mnt/archiso-$USER/arch/${ARCH}/root-image.fs.sfs /tmp/
-	# Install package 'squashfs-tools'
-	unsquashfs -d "$path/archiso-${ARCH}-rootfs" /tmp/root-image.fs.sfs
-	rm /tmp/root-image.fs.sfs
+	unsquashfs -d "$path/archiso-${ARCH}-rootfs" "$path"/archiso/arch/${ARCH}/root-image.fs.sfs
 	(( $(echo $(grep /mnt/rootfs-$USER /etc/mtab)|wc -w) )) || \
 		sudo mount "$path/archiso-${ARCH}-rootfs/root-image.fs" /mnt/rootfs-$USER
+
+	echo
+	echo "Modifying files in /mnt/rootfs-$USER"
+	echo -e "\tto enable sshd.service at boot."
+
+	# Set sshd to start on boot.
+	# Condition:  Does /usr/lib/systemd/system/sshd.service exist?
+	# Yes, it does under arch linux!
+	# Not elegant much, but neat and working.
+	# Elegancko byłoby wypakować
+	sudo ln -s /usr/lib/systemd/system/sshd.service /mnt/rootfs-$USER/etc/systemd/system/multi-user.target.wants/
+
+	echo "Allowing an empty password"
+	echo -e "\tfor ssh'ing into ssh server."
+	# Allow empty passwords for sshd
+	sudo sed -i 's/#PermitEmpty.*/PermitEmptyPasswords yes/;' /mnt/rootfs-$USER/etc/ssh/sshd_config
 
 	if (($BREAK)); then
 		echo -e "\e[32m"
@@ -142,33 +173,29 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 		echo "ISO=$ISO" | sudo tee -a /mnt/archiso-${USER}-params
 		echo -e "\e[1mScript halted.\e[0m"
 		echo -e "\e[1mroot-image.fs \e[0mmounted on\e[1m /mnt/rootfs-$USER\e[0m"
+		warn_incompatibility $ARCH
 		exit
 	fi
-
 else
-	echo -e "\e[32mDirectory /mnt/archiso-$USER-params found."
-	echo The use of -b option assumed in the previous run.
-	source /mnt/archiso-$USER-params
+	echo -e "\e[32mFile /mnt/archiso-$USER-params found."
+	if (($CLEAN)); then
+		echo "The -c flag invoked."
+	else
+		echo -e "\e[1mResuming the halted script with previous parameters."
+		echo -e "Ignoring the current parameters.\e[0m"
+	fi
+	source /mnt/archiso-$USER-params 	# Read parameters; Needed for cleanig, too.
+	sudo rm /mnt/archiso-${USER}-params
 fi
 #--------------------------------------------------------------------
-# Copy the 'arch-chroot' script to your computer. It comes in handy.
-# arch-chroot is awailable in package extra/arch-install-scripts.
-#cp -f /mnt/rootfs/usr/bin/arch-chroot "$path"/
-#sudo chmod a+x "${path}/arch-chroot"
+# May copy the 'arch-chroot' script to your computer. Comes in handy.
+# 'arch-chroot' is available in package extra/arch-install-scripts.
+# Or...
+# cp -f /mnt/rootfs/usr/bin/arch-chroot "$path"/
+# sudo chmod a+x "${path}/arch-chroot"
 #--------------------------------------------------------------------
 
-if [[ $CLEAN -eq 0 ]]; then
-	echo -e "\e[1mIgnoring parameters and resuming the script with previous ones.\e[0m"
-
-	# Warunek:  Czy istnieje /usr/lib/systemd/system/sshd.service?
-	# Tak, pod archlinuksem istnieje!
-	# Mało eleganckie ale skuteczne.
-	# Elegancko byłoby wypakować
-	sudo ln -s /usr/lib/systemd/system/sshd.service /mnt/rootfs-$USER/etc/systemd/system/multi-user.target.wants/
-
-	# Allow empty passwords for sshd
-	sudo sed -i 's/#PermitEmpty.*/PermitEmptyPasswords yes/;' /mnt/rootfs-$USER/etc/ssh/sshd_config
-
+if [[ $CLEAN -eq 0 ]]; then 	# Create a modified iso file
 	# Squash rootfs back
 	mksquashfs "${path}/archiso-${ARCH}-rootfs" /tmp/root-image.fs.sfs
 	mv -f /tmp/root-image.fs.sfs "${path}/archiso/arch/${ARCH}/root-image.fs.sfs"
@@ -182,9 +209,7 @@ if [[ $CLEAN -eq 0 ]]; then
 fi
 echo -n "Cleaning... "
 sudo umount /mnt/rootfs-$USER
-sudo umount /mnt/archiso-$USER
 rm -r "${path}/archiso-${ARCH}-rootfs"
 rm -rf "${path}/archiso" 	# -f required to remove archiso/isolinux/boot.cat
-sudo rm -r /mnt/archiso-${USER}*
 sudo rm -r /mnt/rootfs-$USER
 echo "Done."
