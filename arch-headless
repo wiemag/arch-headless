@@ -7,19 +7,20 @@
 # - it is connected to the local network
 # Currently, the official installation media start with the ssh daemon down.
 # v0.95 first published
-# v1.00 enable hating/braking and resuming the script to allow manual modifications
+# v1.00 enable halting/breaking and resuming the script to allow manual modifications
 # v1.01 optimisations: less copying, ISO unmounted early
+# v1.02 adjusting the script to the new file names within the ISO; new dependency: md5sum
 # Further devel (time permitting) notes:
 # - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
 # - use /tmp (if enough space)
 # - man pages and PKGBUILD; AUR?
 
-VERSION=1.01
+VERSION=1.02
 
 # Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
 	echo "The squashfs-tools package is needed."
-	read -n1 -sp "Install? (y/N) " INST 
+	read -n1 -sp "Install? (y/N) " INST
 	[[ ${INST/y/Y} = "Y" ]] && { PKGS="squashfs-tools"; echo -ne "\r";} || \
 		{ echo -e "\rCome back when you are ready."; exit;}
 fi
@@ -27,8 +28,16 @@ fi
 if [ -z $(which genisoimage) ]; then
 	echo -n "The cdrkit package missing"
 	(( ${#PKGS} )) && echo ", too." || echo "."
-	read -n1 -sp "Install? (y/N) " INST 
+	read -n1 -sp "Install? (y/N) " INST
 	[[ ${INST/y/Y} = "Y" ]] && { PKGS=${PKGS- }" cdrkit"; PKGS=${PKGS/#  /};} || \
+		{ echo -e "\rCome back when you are ready."; exit;}
+fi
+
+if [ -z $(which md5sum) ]; then
+	echo -n "'md5sum' not found. The core/coreutils package missing"
+	(( ${#PKGS} )) && echo ", too." || echo "."
+	read -n1 -sp "Install? (y/N) " INST
+	[[ ${INST/y/Y} = "Y" ]] && { PKGS=${PKGS- }" coreutils"; PKGS=${PKGS/#  /};} || \
 		{ echo -e "\rCome back when you are ready."; exit;}
 fi
 
@@ -36,11 +45,12 @@ fi
 if [[ ${#PKGS} -gt 0 ]]; then
 	echo -e "\r\e[32;1msudo pacman -S ${PKGS}\e[0m"
 	sudo pacman -S ${PKGS}
+	(($?)) && exit 1
 fi
 
 # Declarations and initialisation ---------------
 function usage() {
-	echo -e "\n\e[1march-headless [ -a 32 | 64 ] arch.iso | -h\e[0m\n"
+	echo -e "\n\e[1march-headless [ -a 32 | 64 ] [-b] arch.iso | -c | -h\e[0m\n"
 	echo -e "\tarch.iso - path to arch-install-media.iso"
 	echo -e "\t           e.g. archlinux-2013.09.01-dual.iso"
 	echo -e "\t           or /path/to/archlinux-2013.09.01-dual.iso"
@@ -78,6 +88,13 @@ function warn_incompatibility () {
 ARCH='i686'			# A 32-bit system as the default one.
 BREAK=0 			# BREAK/HALT the script
 CLEAN=0 			# DO NOT RESUME the script and REMOVE FILES instead.
+# Version 1.02:
+# archiso/arch/${ARCH}/root-image.fs.sfs name was changed to airootfs.sfs
+#+ in ARCHLINUX_ISO-201308 or earlier.
+# And an md5 checksum file "airootfs.md5" was added/moved to that folder.
+ROOT_IMG_SFS="airootfs.sfs"		# in archiso/arch/
+ROOTFS_IMG="airootfs.img"   	# inside ROOT_IMG_SFS
+
 
 # If -b is used, a /mnt/archiso-${USER}-params is created.
 
@@ -95,9 +112,7 @@ done
 
 # Here we go ------------------------------------
 if [[ ! -f /mnt/archiso-${USER}-params ]]
-then 	# Assume that BREAK was used in the previous run, and resume the script.
-	 	# Options are ignored if BREAK was used in previous run.
-	# Remove the options parsed above.
+then 	# Remove the options parsed above.
 	shift `expr $OPTIND - 1`
 	ISO="$1"		# Path/name of the official arch installation iso image
 	((${#ISO})) || { usage; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
@@ -117,11 +132,12 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 	# START -----------------------------------------
 
 	[[ -d "/mnt/archiso-$USER" ]] || sudo mkdir "/mnt/archiso-$USER"
+	(($?)) && exit 2
 	[[ -d "/mnt/rootfs-$USER" ]] || sudo mkdir "/mnt/rootfs-$USER"
 	(( $(echo $(grep "/mnt/archiso-$USER" /etc/mtab)|wc -w) )) || \
 		sudo mount -t iso9660 -o loop "$ISO" "/mnt/archiso-$USER" 2>/dev/null
 	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
-	cp -ap "/mnt/archiso-$USER/" "${path}/archiso/"
+	sudo cp -ap "/mnt/archiso-$USER/" "${path}/archiso/"
 	sudo umount /mnt/archiso-$USER 		# Not needed any longer
 	sudo rm -r /mnt/archiso-$USER
 
@@ -134,7 +150,7 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 		"$path"/archiso/arch/boot/syslinux/archiso.cfg
 
 	echo "Removing unnecessary architecture files"
-	if [[ $ARCH = "i686" ]]; then 
+	if [[ $ARCH = "i686" ]]; then
 		echo -e "\tdeleting *x86_64* files and folders"
 		rm -r "$path"/archiso/arch/{*x86_64*,/boot/x86_64}
 	else
@@ -142,23 +158,25 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 		rm -r "$path"/archiso/arch/{*i686*,/boot/i686}
 	fi
 
+## "UEFI: Failed to install override security policy" problem solution:
+	echo "Copying EFI/boot/loader.efi tp EFI/boot/bootx64.efi"
+	echo -e "\tNever tested. Supposed to remedy"
+	echo -e "\tthe 'UEFI: Failed to install override security policy' bug."
+	sudo cp "$path"/archiso/EFI/boot/loader.efi "$path"/archiso/EFI/boot/bootx64.efi
+## --------------------------------------------------------------------
+
 	echo "Unsquashing ...archiso/arch/${ARCH}/root-image.fs.sfs"
 	echo -e "\tto $path/archiso-${ARCH}-rootfs"
 	echo -e "\tand mounting root-image.fs at /mnt/rootfs-${USER}."
 
-	unsquashfs -d "$path/archiso-${ARCH}-rootfs" "$path"/archiso/arch/${ARCH}/root-image.fs.sfs
+	sudo unsquashfs -d "$path/archiso-${ARCH}-rootfs" "$path"/archiso/arch/${ARCH}/${ROOT_IMG_SFS}
 	(( $(echo $(grep /mnt/rootfs-$USER /etc/mtab)|wc -w) )) || \
-		sudo mount "$path/archiso-${ARCH}-rootfs/root-image.fs" /mnt/rootfs-$USER
+		sudo mount "$path/archiso-${ARCH}-rootfs/${ROOTFS_IMG}" /mnt/rootfs-$USER
 
 	echo
 	echo "Modifying files in /mnt/rootfs-$USER"
 	echo -e "\tto enable sshd.service at boot."
-
-	# Set sshd to start on boot.
-	# Condition:  Does /usr/lib/systemd/system/sshd.service exist?
-	# Yes, it does under arch linux!
-	# Not elegant much, but neat and working.
-	# Elegancko byłoby wypakować
+	# /usr/lib/systemd/system/sshd.service does exist in arch linux!
 	sudo ln -s /usr/lib/systemd/system/sshd.service /mnt/rootfs-$USER/etc/systemd/system/multi-user.target.wants/
 
 	echo "Allowing an empty password"
@@ -172,11 +190,14 @@ then 	# Assume that BREAK was used in the previous run, and resume the script.
 		echo "path=$path" | sudo tee -a /mnt/archiso-${USER}-params
 		echo "ISO=$ISO" | sudo tee -a /mnt/archiso-${USER}-params
 		echo -e "\e[1mScript halted.\e[0m"
-		echo -e "\e[1mroot-image.fs \e[0mmounted on\e[1m /mnt/rootfs-$USER\e[0m"
+		echo You can re-run it without parameters to create an ISO,
+		echo or with the flag \'-c\' to abandon the task and clean up.
+		echo -e "\e[1mRoot image (file ${ROOTFS_IMG})\e[0mmounted on\e[1m /mnt/rootfs-$USER\e[0m"
 		warn_incompatibility $ARCH
 		exit
 	fi
-else
+else	# Assume that BREAK was used in the previous run, and resume the script.
+	 	# Options are ignored if BREAK was used in previous run.
 	echo -e "\e[32mFile /mnt/archiso-$USER-params found."
 	if (($CLEAN)); then
 		echo "The -c flag invoked."
@@ -187,18 +208,16 @@ else
 	source /mnt/archiso-$USER-params 	# Read parameters; Needed for cleanig, too.
 	sudo rm /mnt/archiso-${USER}-params
 fi
-#--------------------------------------------------------------------
-# May copy the 'arch-chroot' script to your computer. Comes in handy.
-# 'arch-chroot' is available in package extra/arch-install-scripts.
-# Or...
-# cp -f /mnt/rootfs/usr/bin/arch-chroot "$path"/
-# sudo chmod a+x "${path}/arch-chroot"
-#--------------------------------------------------------------------
 
 if [[ $CLEAN -eq 0 ]]; then 	# Create a modified iso file
 	# Squash rootfs back
-	mksquashfs "${path}/archiso-${ARCH}-rootfs" /tmp/root-image.fs.sfs
-	mv -f /tmp/root-image.fs.sfs "${path}/archiso/arch/${ARCH}/root-image.fs.sfs"
+	sudo mksquashfs "${path}/archiso-${ARCH}-rootfs" /tmp/${ROOT_IMG_SFS}
+	(($?)) && echo 3
+	sudo mv -f /tmp/${ROOT_IMG_SFS} "${path}/archiso/arch/${ARCH}/${ROOT_IMG_SFS}"
+	CURDIR="$PWD"
+	cd "${path}/archiso/arch/${ARCH}/"
+	sudo md5sum "${ROOT_IMG_SFS}" >"${ROOT_IMG_SFS%.*}".md5
+	cd "$CURDIR"
 
 	# Create a modified arch-installation-media.iso
 	genisoimage -l -r -J -V "ARCH_$(date +%Y%m)" -b isolinux/isolinux.bin \
@@ -209,6 +228,7 @@ if [[ $CLEAN -eq 0 ]]; then 	# Create a modified iso file
 fi
 echo -n "Cleaning... "
 sudo umount /mnt/rootfs-$USER
+(($?)) && echo 4
 rm -r "${path}/archiso-${ARCH}-rootfs"
 rm -rf "${path}/archiso" 	# -f required to remove archiso/isolinux/boot.cat
 sudo rm -r /mnt/rootfs-$USER
