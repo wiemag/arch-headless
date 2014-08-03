@@ -10,13 +10,14 @@
 # v1.00 enable halting/breaking and resuming the script to allow manual modifications
 # v1.02 adjusting the script to the new file names within the ISO; new dependency: md5sum
 # v1.03 Safeguard added: Checking kernels to allow mounting.
+# v1.04 ISOLABEL variable added
 # Further devel (time permitting) notes:
 # - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
 # - use /tmp (if enough space)
 # - man pages and PKGBUILD (ready); AUR?
 # - remove/skiping checking missing dependencies if installed
 
-VERSION=1.03
+VERSION=1.04
 
 # Checking if system needs to be rebooted -------
 # Necessery if kernel have been updated.
@@ -100,12 +101,12 @@ function warn_incompatibility () {
 ARCH='i686'			# A 32-bit system as the default one.
 BREAK=0 			# BREAK/HALT the script
 CLEAN=0 			# DO NOT RESUME the script and REMOVE FILES instead.
-# Version 1.02:
 # archiso/arch/${ARCH}/root-image.fs.sfs name was changed to airootfs.sfs
 #+ in ARCHLINUX_ISO-201308 or earlier.
 # And an md5 checksum file "airootfs.md5" was added/moved to that folder.
 ROOT_IMG_SFS="airootfs.sfs"		# in archiso/arch/
 ROOTFS_IMG="airootfs.img"   	# inside ROOT_IMG_SFS
+ISO_LABEL="ARCH_$(date +%Y%m)" 	# to avoid an unpleasant surprise
 
 
 # If -b is used, a /mnt/archiso-${USER}-params is created.
@@ -155,14 +156,17 @@ then 	# Remove the options parsed above.
 	sudo rm -r /mnt/archiso-$USER
 
 	echo "Modifying archiso/arch/boot/syslinux/archiso.cfg"
-	echo -e "\tto log in automatically."
+	echo -e "\tand archiso/loader/entries/archiso-x86_64.conf to log in automatically."
 
 	sudo echo -e "PROMPT 0\nDEFAULT arch-${ARCH}\nLABEL arch-${ARCH}
 	LINUX boot/${ARCH}/vmlinuz\nINITRD boot/${ARCH}/archiso.img
-	APPEND archisobasedir=arch archisolabel=ARCH_$(date +%Y%m)" > \
+	APPEND archisobasedir=arch archisolabel=${ISO_LABEL}" > \
 		"$path"/archiso/arch/boot/syslinux/archiso.cfg
 
+	sudo sed -i "s/archisolabel=ARCH_.*$/archisolabel=${ISO_LABEL}/" "$path"/archiso/loader/entries/archiso-x86_64.conf
+
 	echo "Removing unnecessary architecture files"
+
 	if [[ $ARCH = "i686" ]]; then
 		echo -e "\tdeleting *x86_64* files and folders"
 		rm -r "$path"/archiso/arch/{*x86_64*,/boot/x86_64}
@@ -233,7 +237,7 @@ if [[ $CLEAN -eq 0 ]]; then 	# Create a modified iso file
 	cd "$CURDIR"
 
 	# Create a modified arch-installation-media.iso
-	genisoimage -l -r -J -V "ARCH_$(date +%Y%m)" -b isolinux/isolinux.bin \
+	genisoimage -l -r -J -V ${ISO_LABEL} -b isolinux/isolinux.bin \
 		-no-emul-boot -boot-load-size 4 -boot-info-table -c isolinux/boot.cat \
 		-o "${path}/arch-${ARCH}-$(date +%Y%m%d-%H%M).iso" "${path}/archiso"
 	(($?)) || \
