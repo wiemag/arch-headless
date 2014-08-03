@@ -8,14 +8,26 @@
 # Currently, the official installation media start with the ssh daemon down.
 # v0.95 first published
 # v1.00 enable halting/breaking and resuming the script to allow manual modifications
-# v1.01 optimisations: less copying, ISO unmounted early
 # v1.02 adjusting the script to the new file names within the ISO; new dependency: md5sum
+# v1.03 Safeguard added: Checking kernels to allow mounting.
 # Further devel (time permitting) notes:
 # - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
 # - use /tmp (if enough space)
-# - man pages and PKGBUILD; AUR?
+# - man pages and PKGBUILD (ready); AUR?
+# - remove/skiping checking missing dependencies if installed
 
-VERSION=1.02
+VERSION=1.03
+
+# Checking if system needs to be rebooted -------
+# Necessery if kernel have been updated.
+
+u=$(uname -r); u=${u%-ARCH}
+p=$(pacman -Q linux|cut -d" " -f2)
+if [[ $u != $p ]]; then
+        echo -e "Kernel installed: ${p}\nKernel running:   $u"
+        echo -e "Mounting not possible.\nYour computer needs to be rebooted."
+        exit
+fi
 
 # Checking missing dependencies -----------------
 if [ -z $(which unsquashfs) ]; then
@@ -136,6 +148,7 @@ then 	# Remove the options parsed above.
 	[[ -d "/mnt/rootfs-$USER" ]] || sudo mkdir "/mnt/rootfs-$USER"
 	(( $(echo $(grep "/mnt/archiso-$USER" /etc/mtab)|wc -w) )) || \
 		sudo mount -t iso9660 -o loop "$ISO" "/mnt/archiso-$USER" 2>/dev/null
+	(($?)) && { echo $ISO; echo "Mount error"; exit 22;}
 	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
 	sudo cp -ap "/mnt/archiso-$USER/" "${path}/archiso/"
 	sudo umount /mnt/archiso-$USER 		# Not needed any longer
@@ -192,7 +205,7 @@ then 	# Remove the options parsed above.
 		echo -e "\e[1mScript halted.\e[0m"
 		echo You can re-run it without parameters to create an ISO,
 		echo or with the flag \'-c\' to abandon the task and clean up.
-		echo -e "\e[1mRoot image (file ${ROOTFS_IMG})\e[0mmounted on\e[1m /mnt/rootfs-$USER\e[0m"
+		echo -e "Root image (file \e[1m${ROOTFS_IMG}\e[0m) mounted on\e[1m /mnt/rootfs-$USER\e[0m"
 		warn_incompatibility $ARCH
 		exit
 	fi
