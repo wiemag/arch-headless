@@ -1,4 +1,5 @@
 Install archlinux on your headless machine.
+-------------------------------------------
 
 
 "arch-headless" is a script that takes an official archlinux installation iso image and modifies it in such a way that during the installation the root user is logged in automatically. The sshd.service starts automatically and root logins are allowed with an empty password.
@@ -25,7 +26,9 @@ REQUIREMENTS
 
 INSTALLATION
 
-No installation needed.
+No installation needed. The script has been simplified and does not install missing dependencies any longer, just informs that a dependency is missing and exits.
+
+There is a PKGBUILD availavble on Arch linux AUR and on https://github/wiemag/PKGBUILDs
 
 
 DEPENDENCIES
@@ -33,4 +36,6 @@ DEPENDENCIES
 - squachfs-tools (cammands: unsquashfs, mksquashfs)
 - cdrkit         (command:  genisoimage)
 - sed            (command:  sed)
-- coreutils      (command:  wc)
+- coreutils      (command:  wc, md5sum)
+
+'cdrkit' conflicts with 'cdrtools'. Modify PKGBUILD if you prefer 'cdrtools'.

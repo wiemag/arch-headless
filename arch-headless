@@ -9,18 +9,16 @@
 # v0.95 first published
 # v1.00 enable halting/breaking and resuming the script to allow manual modifications
 # v1.02 adjusting the script to the new file names within the ISO; new dependency: md5sum
-# v1.03 Safeguard added: Checking kernels to allow mounting.
-# v1.04 ISOLABEL variable added
+# v1.05 Simplification with an assumption the script has been installed.
 # Further devel (time permitting) notes:
 # - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
 # - use /tmp (if enough space)
-# - man pages and PKGBUILD (ready); AUR?
-# - remove/skiping checking missing dependencies if installed
+# - remove/skiping checking missing dependencies if script installed
 
-VERSION=1.04
+VERSION=1.05
 
 # Checking if system needs to be rebooted -------
-# Necessery if kernel have been updated.
+# Necessery if kernel has been updated.
 
 u=$(uname -r); u=${u%-ARCH}
 p=$(pacman -Q linux|cut -d" " -f2)
@@ -31,35 +29,9 @@ if [[ $u != $p ]]; then
 fi
 
 # Checking missing dependencies -----------------
-if [ -z $(which unsquashfs) ]; then
-	echo "The squashfs-tools package is needed."
-	read -n1 -sp "Install? (y/N) " INST
-	[[ ${INST/y/Y} = "Y" ]] && { PKGS="squashfs-tools"; echo -ne "\r";} || \
-		{ echo -e "\rCome back when you are ready."; exit;}
-fi
-
-if [ -z $(which genisoimage) ]; then
-	echo -n "The cdrkit package missing"
-	(( ${#PKGS} )) && echo ", too." || echo "."
-	read -n1 -sp "Install? (y/N) " INST
-	[[ ${INST/y/Y} = "Y" ]] && { PKGS=${PKGS- }" cdrkit"; PKGS=${PKGS/#  /};} || \
-		{ echo -e "\rCome back when you are ready."; exit;}
-fi
-
-if [ -z $(which md5sum) ]; then
-	echo -n "'md5sum' not found. The core/coreutils package missing"
-	(( ${#PKGS} )) && echo ", too." || echo "."
-	read -n1 -sp "Install? (y/N) " INST
-	[[ ${INST/y/Y} = "Y" ]] && { PKGS=${PKGS- }" coreutils"; PKGS=${PKGS/#  /};} || \
-		{ echo -e "\rCome back when you are ready."; exit;}
-fi
-
-# Installing missing dependencies ---------------
-if [[ ${#PKGS} -gt 0 ]]; then
-	echo -e "\r\e[32;1msudo pacman -S ${PKGS}\e[0m"
-	sudo pacman -S ${PKGS}
-	(($?)) && exit 1
-fi
+[[ -z $(which unsquashfs) ]] && { echo "The squashfs-tools package is needed."; exit;}
+[[ -z $(which genisoimage) ]] && { 	echo -n "'genisoimage' not found."; exit;}
+[[ -z $(which md5sum) ]] && { echo -n "'md5sum' not found. The coreutils package missing"; exit;}
 
 # Declarations and initialisation ---------------
 function usage() {
@@ -99,8 +71,8 @@ function warn_incompatibility () {
 }
 
 ARCH='i686'			# A 32-bit system as the default one.
-BREAK=0 			# BREAK/HALT the script
-CLEAN=0 			# DO NOT RESUME the script and REMOVE FILES instead.
+BREAK=0 			# If 1, BREAK/HALT the script
+CLEAN=0 			# If 1, DO NOT RESUME the script and REMOVE FILES instead.
 # archiso/arch/${ARCH}/root-image.fs.sfs name was changed to airootfs.sfs
 #+ in ARCHLINUX_ISO-201308 or earlier.
 # And an md5 checksum file "airootfs.md5" was added/moved to that folder.
@@ -124,18 +96,18 @@ do
 done
 
 # Here we go ------------------------------------
-if [[ ! -f /mnt/archiso-${USER}-params ]]
-then 	# Remove the options parsed above.
-	shift `expr $OPTIND - 1`
+if [[ ! -f /mnt/archiso-${USER}-params ]] # Has the sctipt been run and halted?
+then
+	shift `expr $OPTIND - 1` 	# Remove the options parsed above.
 	ISO="$1"		# Path/name of the official arch installation iso image
 	((${#ISO})) || { usage; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
-	if [ -f "$ISO" ]; then
+	if [[ -f "$ISO" ]]; then
 		path=$(basepath $ISO)
 		ISO=${path}/${ISO##*/}
 	else
 		usage
 		echo -e "\e[31;1m${ISO}\e[0m not found."
-		exit 1
+		exit
 	fi
 	if (($CLEAN)); then
 		echo "Ignoring the -c flag - no previous run files found."
@@ -145,11 +117,11 @@ then 	# Remove the options parsed above.
 	# START -----------------------------------------
 
 	[[ -d "/mnt/archiso-$USER" ]] || sudo mkdir "/mnt/archiso-$USER"
-	(($?)) && exit 2
+	(($?)) && exit 1
 	[[ -d "/mnt/rootfs-$USER" ]] || sudo mkdir "/mnt/rootfs-$USER"
 	(( $(echo $(grep "/mnt/archiso-$USER" /etc/mtab)|wc -w) )) || \
 		sudo mount -t iso9660 -o loop "$ISO" "/mnt/archiso-$USER" 2>/dev/null
-	(($?)) && { echo $ISO; echo "Mount error"; exit 22;}
+	(($?)) && { echo $ISO; echo "Mount error"; exit 2;}
 	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
 	sudo cp -ap "/mnt/archiso-$USER/" "${path}/archiso/"
 	sudo umount /mnt/archiso-$USER 		# Not needed any longer
@@ -176,10 +148,10 @@ then 	# Remove the options parsed above.
 	fi
 
 ## "UEFI: Failed to install override security policy" problem solution:
-	echo "Copying EFI/boot/loader.efi tp EFI/boot/bootx64.efi"
-	echo -e "\tNever tested. Supposed to remedy"
-	echo -e "\tthe 'UEFI: Failed to install override security policy' bug."
-	sudo cp "$path"/archiso/EFI/boot/loader.efi "$path"/archiso/EFI/boot/bootx64.efi
+#	echo "Copying EFI/boot/loader.efi tp EFI/boot/bootx64.efi"
+#	echo -e "\tNever tested. Supposed to remedy"
+#	echo -e "\tthe 'UEFI: Failed to install override security policy' bug."
+#	sudo cp "$path"/archiso/EFI/boot/loader.efi "$path"/archiso/EFI/boot/bootx64.efi
 ## --------------------------------------------------------------------
 
 	echo "Unsquashing ...archiso/arch/${ARCH}/root-image.fs.sfs"
