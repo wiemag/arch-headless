@@ -10,17 +10,18 @@
 # v1.00 enable halting/breaking and resuming the script to allow manual modifications
 # v1.02 adjusting the script to the new file names within the ISO; new dependency: md5sum
 # v1.05 Simplification with an assumption the script has been installed.
+# v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
 # Further devel (time permitting) notes:
 # - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
 # - use /tmp (if enough space)
 # - remove/skiping checking missing dependencies if script installed
 
-VERSION=1.05
+VERSION=1.06
 
 # Checking if system needs to be rebooted -------
-# Necessery if kernel has been updated.
+# Necessery if kernel has been updated. Note that for example 3.16-1 equals 3.16.0-1.
 
-u=$(uname -r); u=${u%-ARCH}
+u=$(uname -r); u=${u%-ARCH}; u=${u/.0-/-}
 p=$(pacman -Q linux|cut -d" " -f2)
 if [[ $u != $p ]]; then
         echo -e "Kernel installed: ${p}\nKernel running:   $u"
