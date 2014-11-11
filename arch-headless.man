@@ -1,6 +1,6 @@
 .\" Man pages for arch-headless
 
-.TH man 1 "2014-11-11" "0.01" "arch-headless man pages"
+.TH man 1 "2014-11-11" "0.02" "arch-headless man pages"
 
 .SH NAME
 .B "arch-headless"
@@ -76,12 +76,12 @@ The author has decided not to include the isohybrid command in this script. But 
 This example shows how to modify the ISO file so that it can be used on the second partition of a USB flash disk. Note the PARTITON, and not the DEVICE (flash drive).
 .PP
 .RS
-.B isohybrid -e2 -partok remastered-arch.iso
+.B isohybrid -partok remastered-arch.iso
 .RE
 .PP
-The 'partok' tells isohybrid that the ISO file may be put (dd'ed) on a partition rather than the device. The '-e2' means that this will be the second partition.
-.PP
-You can now dd the remastered-arch.iso to partition 2 of your flash drive.
+The 'partok' tells isohybrid that the ISO file may be put (dd'ed) on a partition rather than the device.
+.br
+You can now dd the remastered-arch.iso to a partition, e.g. partition 2 of your flash drive.
 .PP
 .RS
 .B dd bs=4M if=/path/to/remastered-arch.iso of=/dev/sdx2 && sync
@@ -90,6 +90,8 @@ You can now dd the remastered-arch.iso to partition 2 of your flash drive.
 where /dev/sdx is the flash drive.
 .br
 Do not forget to make partition 2 bootable.
+.PP
+If you would rather dd the ISO image directly to the flash disk (/dev/sdx), leave out the '--partok' option in the example above.
 
 
 .SH BUGS

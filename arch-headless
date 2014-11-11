@@ -14,7 +14,7 @@
 # - use /tmp (if enough space)
 # - remove/skiping checking missing dependencies if script installed
 
-VERSION=1.07
+VERSION=1.08
 
 # Checking if system needs to be rebooted -------
 # Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
@@ -34,14 +34,15 @@ fi
 
 # Declarations and initialisation ---------------
 function usage() {
-	echo -e "\n\e[1march-headless [ -a 32 | 64 ] [-b] arch.iso | -c | -h\e[0m\n"
+	echo -e "\n\e[1march-headless [ -a 32 | 64 ] [-b] arch.iso | -c | -h | -v\e[0m\n"
 	echo -e "\tarch.iso - path to arch-install-media.iso"
 	echo -e "\t           e.g. archlinux-2013.09.01-dual.iso"
 	echo -e "\t           or /path/to/archlinux-2013.09.01-dual.iso"
 	echo -e "\t-a 32 - create iso for a 32-bit system (default)"
 	echo -e "\t-a 64 - create iso for a 64-bit system"
 	echo -e "\t-b    - break/halt this script to allow manual modification in chroot"
-	echo -e "\t-c    - give up the halted task (-b) and clean the files\n"
+	echo -e "\t-c    - give up the halted task (-b) and clean the files"
+	echo -e "\t-v    - show the ${0##*/} version number\n"
 }
 
 function basepath () {
@@ -175,6 +176,11 @@ then
 	echo -e "\tfor ssh'ing into ssh server."
 	# Allow empty passwords for sshd
 	sudo sed -i 's/#PermitEmpty.*/PermitEmptyPasswords yes/;' /mnt/rootfs-$USER/etc/ssh/sshd_config
+
+	echo "Adding alias to /etc/bash.bashrc (Author's idiosyncrasy):"
+	echo -e "\talias s='systemctl'\n"
+	# Add it as the first line in the zshrc configuration file
+	sudo sed -i "1s/^/alias s='systemctl'\n/" /mnt/rootfs-$USER/etc/zsh/zshrc
 
 	if (($BREAK)); then
 		echo -e "\e[32m"
