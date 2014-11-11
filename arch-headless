@@ -7,19 +7,17 @@
 # - it is connected to the local network
 # Currently, the official installation media start with the ssh daemon down.
 # v0.95 first published
-# v1.00 enable halting/breaking and resuming the script to allow manual modifications
-# v1.02 adjusting the script to the new file names within the ISO; new dependency: md5sum
-# v1.05 Simplification with an assumption the script has been installed.
 # v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
+# v1.07 Minor simplification by avoiding copying some unwanted architecture files.
 # Further devel (time permitting) notes:
 # - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
 # - use /tmp (if enough space)
 # - remove/skiping checking missing dependencies if script installed
 
-VERSION=1.06
+VERSION=1.07
 
 # Checking if system needs to be rebooted -------
-# Necessery if kernel has been updated. Note that for example 3.16-1 equals 3.16.0-1.
+# Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
 
 u=$(uname -r); u=${u%-ARCH}; u=${u/.0-/-}
 p=$(pacman -Q linux|cut -d" " -f2)
@@ -124,7 +122,11 @@ then
 		sudo mount -t iso9660 -o loop "$ISO" "/mnt/archiso-$USER" 2>/dev/null
 	(($?)) && { echo $ISO; echo "Mount error"; exit 2;}
 	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
-	sudo cp -ap "/mnt/archiso-$USER/" "${path}/archiso/"
+	sudo mkdir -p "${path}/archiso/arch/boot"
+	sudo cp -apr /mnt/archiso-$USER/{EFI,isolinux,loader} "${path}/archiso"
+	sudo cp -apr /mnt/archiso-$USER/arch/{boot,${ARCH},pkglist.${ARCH}.txt} "${path}/archiso/arch"
+#	sudo cp -apr /mnt/archiso-$USER/arch/${ARCH} "${path}/archiso/arch"
+#	sudo cp -ap /mnt/archiso-$USER/arch/pkglist.${ARCH}.txt "${path}/archiso/arch"
 	sudo umount /mnt/archiso-$USER 		# Not needed any longer
 	sudo rm -r /mnt/archiso-$USER
 
@@ -142,10 +144,10 @@ then
 
 	if [[ $ARCH = "i686" ]]; then
 		echo -e "\tdeleting *x86_64* files and folders"
-		rm -r "$path"/archiso/arch/{*x86_64*,/boot/x86_64}
+		rm -r "$path"/archiso/arch/boot/x86_64
 	else
-		echo -e "\tdeleting *x686* files and folders"
-		rm -r "$path"/archiso/arch/{*i686*,/boot/i686}
+		echo -e "\tdeleting *i686* files and folders"
+		rm -r "$path"/archiso/arch/boot/i686
 	fi
 
 ## "UEFI: Failed to install override security policy" problem solution:
