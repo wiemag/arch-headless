@@ -8,13 +8,12 @@
 # Currently, the official installation media start with the ssh daemon down.
 # v0.95 first published
 # v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
-# v1.07 Minor simplification by avoiding copying some unwanted architecture files.
 # Further devel (time permitting) notes:
 # - do not copy all files to path/archiso, do not copy those to be deleted as unwanted arch.
 # - use /tmp (if enough space)
 # - remove/skiping checking missing dependencies if script installed
 
-VERSION=1.08
+VERSION=1.09
 
 # Checking if system needs to be rebooted -------
 # Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
@@ -34,6 +33,9 @@ fi
 
 # Declarations and initialisation ---------------
 function usage() {
+	echo -e "\narch-headless modifies the official arch linux installation"
+	echo image to enable passwordless SSH\'ing into the system booted from
+	echo -e "the installation media. See man pages (man arch-headless).\n"
 	echo -e "\n\e[1march-headless [ -a 32 | 64 ] [-b] arch.iso | -c | -h | -v\e[0m\n"
 	echo -e "\tarch.iso - path to arch-install-media.iso"
 	echo -e "\t           e.g. archlinux-2013.09.01-dual.iso"
