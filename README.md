@@ -36,6 +36,9 @@ DEPENDENCIES
 - squachfs-tools (cammands: unsquashfs, mksquashfs)
 - cdrkit         (command:  genisoimage)
 - sed            (command:  sed)
-- coreutils      (command:  wc, md5sum)
+- util-linux     (command:  mount, umount)
+- coreutils      (command:  wc, md5sum, ln, cp, echo)
+- gawk           (command:  awk)
+- kbd            (command:  loadkeys, setfont)
 
 'cdrkit' conflicts with 'cdrtools'. Modify PKGBUILD if you prefer 'cdrtools'.

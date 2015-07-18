@@ -1,6 +1,6 @@
 .\" Man pages for arch-headless
 
-.TH man 1 "2014-11-11" "0.02" "arch-headless man pages"
+.TH man 1 "2015-07-19" "1.11" "arch-headless man pages"
 
 .SH NAME
 .B "arch-headless"
@@ -10,7 +10,7 @@ The main purpose of the \fIarch-headless\fR script is to remaster the standard a
 Run
 .RS
 .B arch-headless.sh
-[\fB\-a\fR\fI 32|64\fR] [\fB-b\fR] [\fB-c\fR] \fIpath/to/file.iso\fR
+[\fB\-a\fR\fI 32|64\fR] [\fB-l\fR] [\fB-b\fR] [\fB-c\fR] \fIpath/to/file.iso\fR
 .RE
 .br
 where
@@ -18,6 +18,9 @@ where
 \fIpath/to/installation-file.iso\fR is the official installation ISO file as downloaded form \fIhttps://www.archlinux.org/download\fR.
 .PP
 \fB-a\fR  is the architecture, 32-bit (default) or 64-bit
+.PP
+.PP
+\fB-l\fR  copies time zone and locale files and settings from the host computer into the ISO image being created
 .PP
 \fB-b\fR  halts the script to make manual remstering possible. Re-running the script resumes the script where it was halted to create an ISO file including the manually made modifications.
 .PP
@@ -42,6 +45,19 @@ The possible architecture values are \fB32\fR (by default) and \fB64\fR.
 .PP
 .RS
 An assumption was made that this scrit will most likely be used to install arch linux on old computers, so the 32-bit architecture is more likely than not.
+.RE
+.TP
+\fB-l\fR
+This option copies the locale files and settings as well as font, keyboard, time zone configurations from the host computer into the ISO image being created. The list of copied files includes
+.PP
+.RS
+- /etc/locale*
+.br
+- /usr/lib/locale/locale-archive
+.br
+- /etc/vconsole.conf
+.br
+- /etc/localtime (symlink)
 .RE
 .TP
 \fB-b\fR
