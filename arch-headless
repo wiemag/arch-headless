@@ -12,7 +12,7 @@
 #
 # v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
 
-VERSION=1.11 # 2015-07-18, option -l (for locale) added
+VERSION=1.12 # 2015-07-21, option -f file/folder added
 
 # Checking if system needs to be rebooted -------
 # Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
@@ -28,23 +28,32 @@ fi
 [[ -z $(which unsquashfs) ]] && { echo "The squashfs-tools package is needed."; exit;}
 [[ -z $(which genisoimage) ]] && { 	echo -n "'genisoimage' not found."; exit;}
 [[ -z $(which md5sum) ]] && { echo -n "'md5sum' not found. The coreutils package missing"; exit;}
+[[ -z $(which setfont) ]] && { echo -n "'The gawk package missing"; exit;}
 
 # Declarations and initialisation ---------------
-function usage() {
+function syno() {
 	echo -e "\narch-headless modifies the official arch linux installation"
 	echo image to enable passwordless SSH\'ing into the system booted from
 	echo -e "the installation media. See man pages (man arch-headless).\n"
-	echo -e "\n\e[1march-headless [ -a 32 | 64 ] [-l] [-b] arch.iso | -c | -h | -v\e[0m\n"
-	echo -e "\tarch.iso - path to arch-install-media.iso"
-	echo -e "\t           e.g. archlinux-2013.09.01-dual.iso"
-	echo -e "\t           or /path/to/archlinux-2013.09.01-dual.iso"
-	echo -e "\t-a 32 - create iso for a 32-bit system (default)"
-	echo -e "\t-a 64 - create iso for a 64-bit system"
-	echo -e "\t-l    - copy locale/keybord/font/time-zone settings from host to ISO"
-	echo -e "\t-b    - break/halt this script to allow manual modification in chroot"
-	echo -e "\t-c    - give up the halted task (-b) and clean the files"
-	echo -e "\t-v    - show the ${0##*/} version number\n"
 }
+function flags() {
+	echo "  arch.iso  path to arch-install-media.iso"
+	echo "            e.g. archlinux-2013.09.01-dual.iso"
+	echo "            or /path/to/archlinux-2013.09.01-dual.iso"
+	echo "  -a 32     create iso for a 32-bit system (default)"
+	echo "  -a 64     create iso for a 64-bit system"
+	echo "  -l        copy locale/keybord/font/time-zone settings from host to ISO"
+	echo "  -f file|folder"
+	echo "            copy file or folder contents into /usr/local/bin folder"
+	echo "  -b        break/halt this script to allow manual modification in chroot"
+	echo "  -c        give up the halted task (-b) and clean the files"
+	echo -e "  -v        show the ${0##*/} version number\n"
+}
+function usage() {
+	echo -e "\n\e[1march-headless [ -a 32 | 64 ] [-l] [-f file|folder] [-b] arch.iso | -c | -h | -v\e[0m\n"
+	(( $# )) && flags
+}
+
 
 function basepath () {
 	local PATH p
@@ -75,6 +84,7 @@ ARCH='i686'		# A 32-bit system as the default one.
 BREAK=0 		# If 1, BREAK/HALT the script
 CLEAN=0 		# If 1, DO NOT RESUME the script and REMOVE FILES instead.
 CP_LOCALE=0 	# If 1, copy locale/keymap/font/time zone configs to ISO.
+FILE="" 		# File or folder to be copied to /usr/local/bin/
 # archiso/arch/${ARCH}/root-image.fs.sfs name was changed to airootfs.sfs
 #+ in ARCHLINUX_ISO-201308 or earlier.
 # And an md5 checksum file "airootfs.md5" was added/moved to that folder.
@@ -82,19 +92,26 @@ ROOTFS_SFS='airootfs.sfs'		# in archiso/arch/
 ROOTFS_IMG='airootfs.img'   	# inside ROOTFS_SFS
 ISO_LABEL="ARCH_$(date +%Y%m)" 	# to avoid an unpleasant surprise
 ISO_FNAME=''                    # ISO image file name; Set later in the script
+CMDLINE="$0 $@"
 
 # If -b is used, a /mnt/archiso-${USER}-params is created.
 
 # Parse the command line ------------------------
-while getopts  ":a:bclhv" flag
+while getopts  ":a:bclf:hv" flag
 do
     case "$flag" in
-		h) usage && exit;;
+		h) syno; usage 1; exit;;
 		v) echo -e "\n${0##*/} v.${VERSION}"; exit;;
 		a) [[ "$OPTARG" -gt 49 ]] && ARCH="x86_64";;
 		b) BREAK=1;;
 		c) CLEAN=1;;
 		l) CP_LOCALE=1;;
+		f) FILE="$OPTARG"; if [[ ! -e "$FILE" ]]; then
+			echo Current directory: $(pwd)
+			echo $FILE does not exist.
+			read -p "Ignore this option and continue? (y/N) " Q
+			[ ! "${Q,,}" = 'y' ] && exit
+		   fi;;
 	esac
 done
 
@@ -103,13 +120,22 @@ if [[ ! -f /mnt/archiso-${USER}-params ]] # If the script has NOT been run and h
 then
 	shift `expr $OPTIND - 1` 	# Remove the options parsed above.
 	ISO="$1"		# Path/name of the official arch installation iso image
-	((${#ISO})) || { usage; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
+	((${#ISO})) || { usage 1; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
 	if [[ -f "$ISO" ]]; then
+		(($(file -ib "$ISO" |grep -c iso9660))) || {
+			usage
+			echo -e "\e[1m${ISO}\e[0m is not an ISO-type file."
+			[[ -n "$FILE" ]] && {
+				echo The ISO file may be corrupted or the -f option has been misused.
+				echo -e "Do not use wildcards.\n"
+				echo -e "You have run:\n$CMDLINE"
+			}
+			exit
+		}
 		path=$(basepath $ISO) 		# Root (/) based path.
 		ISO=${path}/${ISO##*/} 		# Full path file name.
 	else
-		usage
-		echo -e "\e[31;1m${ISO}\e[0m not found."
+		echo -e "\nFile \e[1m${ISO}\e[0m not found."
 		exit
 	fi
 	if (($CLEAN)); then
@@ -193,7 +219,8 @@ then
 		sudo cp /usr/lib/locale/locale-archive /mnt/rootfs-$USER/usr/lib/locale/ && \
 			echo -e  "\t/usr/lib/locale/locale-archive copied.\n"
 		# FOR A REASON VIRTUAL MACHINE DOES NOT READ FONT_MAP from /ect/vconsole.conf
-		# Thus is a work around
+		# This is a work around
+		# Add $SCRIPT to zshrc so that it runs at automatic login.
 		SCRIPT="KEYMAP=''; FONT=''; FONT_MAP=''\n
 		[[ -f /etc/vconsole.conf ]] && 	source /etc/vconsole.conf\n
 		[[ -n \$KEYMAP ]] && loadkeys \$KEYMAP\n
@@ -202,6 +229,15 @@ then
 		fi\n"
 		cat <(echo -e $SCRIPT) /mnt/rootfs-$USER/etc/zsh/zshrc > zshrc.new && \
 			sudo mv zshrc.new /mnt/rootfs-$USER/etc/zsh/zshrc
+	fi
+	# Copy file or folder contents to ISO's /usr/local/bin folder.
+	if [[ -e "$FILE" ]]; then
+		echo -n "Copying ${FILE%/}"
+		[[ -f "$FILE" ]] && echo && \
+			sudo cp "$FILE" /mnt/rootfs-$USER/usr/local/bin/
+		[[ -d "$FILE"  ]] && echo '/*' && \
+			sudo cp "${FILE%/}"/* /mnt/rootfs-$USER/usr/local/bin/ 2>/dev/null
+		echo -e "\tinto ISO's /usr/local/bin/ folder.\n"
 	fi
 
 	if (($BREAK)); then

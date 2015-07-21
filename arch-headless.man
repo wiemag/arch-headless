@@ -1,6 +1,6 @@
 .\" Man pages for arch-headless
 
-.TH man 1 "2015-07-19" "1.11" "arch-headless man pages"
+.TH man 1 "2015-07-21" "1.12" "arch-headless man pages"
 
 .SH NAME
 .B "arch-headless"
@@ -10,7 +10,7 @@ The main purpose of the \fIarch-headless\fR script is to remaster the standard a
 Run
 .RS
 .B arch-headless.sh
-[\fB\-a\fR\fI 32|64\fR] [\fB-l\fR] [\fB-b\fR] [\fB-c\fR] \fIpath/to/file.iso\fR
+[\fB\-a\fR\fI 32|64\fR] [\fB-l\fR] [\fB\-f\fR\fI file\fR] [\fB-b\fR] [\fB-c\fR] \fIpath/to/file.iso\fR
 .RE
 .br
 where
@@ -19,10 +19,11 @@ where
 .PP
 \fB-a\fR  is the architecture, 32-bit (default) or 64-bit
 .PP
-.PP
 \fB-l\fR  copies time zone and locale files and settings from the host computer into the ISO image being created
 .PP
-\fB-b\fR  halts the script to make manual remstering possible. Re-running the script resumes the script where it was halted to create an ISO file including the manually made modifications.
+\fB-f\fR \fIfile\fR: The "\fIfile\fR" is a chosen file to be copied to the ISO image or a directory the contents of which will be copied to the ISO image. See the OPTIONS section below for details.
+.PP
+\fB-b\fR  halts the script to make manual remastering possible. Re-running the script resumes the script where it was halted to create an ISO file including the manually made modifications.
 .PP
 \fB-c\fR  drops remastering changes made the first time, and cleans the leftovers.
 .RE
@@ -34,7 +35,7 @@ The \fIarch-headless\fR script remasters the official installation ISO file in s
 .RS
 - sshd.service is enabled on port 22 (the standard port)
 .br
-- ssh paswordless login over SSH is allowed.
+- ssh passwordless login over SSH is allowed.
 .RE
 If the remastered ISO is meant to be installed on a USB device, please have a look at the 'SEE ALSO' section below.
 
@@ -60,15 +61,22 @@ This option copies the locale files and settings as well as font, keyboard, time
 - /etc/localtime (symlink)
 .RE
 .TP
-\fB-b\fR
-The script makes all the intended changes within the standard ISO file system and exits before creating the remastered ISO. All the creadted directories are possible to modify, including installing additional software to the remastered ISO. This is not trivial--have a look at the 'SEE ALSO' section below.
+\fB-f\fR \fIfile|folder\fR
+This option makes it possible to copy a chosen file or the contents of a chosen directory to the \fI/usr/local/bin\fR folder of the installation media ISO image. The primary goal is to put users own scripts into the image, but in fact any files can be copied to the ISO this way.
 .PP
 .RS
-Run the script again and all the ISO including all the automated and manual modifications will be created, unless the \fB-c\fR option is used.
+It is important that no wild card characters (? or *) should be used in the option parameter. Only the first resolved file name will be used by the option. The next (if such exists) will be interpreted as the input ISO file. As a safeguard the input ISO file type is checked and it has to be iso9660 for the script to continue.
+.RE
+.TP
+\fB-b\fR
+The script makes all the intended changes within the standard ISO file system and exits before creating the remastered ISO so that the user has an option to further modify the installation media, including installing additional software to the remastered ISO. This is not trivial--have a look at the 'SEE ALSO' section below.
+.PP
+.RS
+Run the script again and all the modifications will be incorporated into the new ISO image, unless the \fB-c\fR option is used.
 .RE
 .TP
 \fB-c\fR
-If this option is used, the script will drop all the modifications made in the official ISO file system. All the directories that were created the first time around  will be deleted.
+If this option is used, the script will drop all the modifications made in the official ISO file system. All the directories that were created the first time around will be deleted.
 
 .SH INSTALLATION
 As the arch-headless package is in AUR (Arch User Repository) the usual installation methods for AUR packages can be used. And as the arch-headless is just a BASH script, it can be copied to wherever the user needs it.
@@ -76,7 +84,7 @@ As the arch-headless package is in AUR (Arch User Repository) the usual installa
 An automated method is recommended to ensure that all the dependences needed are installed.
 
 .SH CONFIGURATION AND USAGE OF THE SERVICE
-No configuration is available; neither it is needed.
+No configuration.
 
 .SH SEE ALSO
 .TP
