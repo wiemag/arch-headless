@@ -7,7 +7,7 @@ Install archlinux on your headless machine.
 With version 0.97 unnecessary architecture files are removed from the iso image, and the resulting iso-image file name is changed to show the modified-image architecture.
 Version 1.11 adds time zone and locale configuration.
 Version 1.12 allows adding your own scripts/files to the installation media.
-
+Version 1.13 works with the new archiso structure (new structure from 201510)
 
 APPLICATION
 

@@ -11,8 +11,9 @@
 # Currently, the official installation media start with the ssh daemon down.
 #
 # v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
+# v1.13 Modifications resulting from the ISO structure change introduced in 201510.
 
-VERSION=1.12 # 2015-07-21, option -f file/folder added
+VERSION=1.13 # 2015-10-03, hidded ISO-structure change
 
 # Checking if system needs to be rebooted -------
 # Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
@@ -25,10 +26,13 @@ if [[ $u != $p ]]; then
 fi
 
 # Checking missing dependencies -----------------
-[[ -z $(which unsquashfs) ]] && { echo "The squashfs-tools package is needed."; exit;}
-[[ -z $(which genisoimage) ]] && { 	echo -n "'genisoimage' not found."; exit;}
-[[ -z $(which md5sum) ]] && { echo -n "'md5sum' not found. The coreutils package missing"; exit;}
-[[ -z $(which setfont) ]] && { echo -n "'The gawk package missing"; exit;}
+hash unsquashfs 2>/dev/null || { echo "The squashfs-tools package is needed."; exit;}
+hash genisoimage 2>/dev/null || { 	echo -n "'genisoimage' not found."; exit;}
+hash md5sum 2>/dev/null || { echo -n "'md5sum' not found. The coreutils package missing"; exit;}
+hash setfont 2>/dev/null || { echo -n "'The gawk package missing"; exit;}
+
+# Checking if run by root -----------------------
+#[[ $EUID -ne 0 ]] && { echo "Run this script as the root." 2>&1; exit 1;}
 
 # Declarations and initialisation ---------------
 function syno() {
@@ -85,11 +89,9 @@ BREAK=0 		# If 1, BREAK/HALT the script
 CLEAN=0 		# If 1, DO NOT RESUME the script and REMOVE FILES instead.
 CP_LOCALE=0 	# If 1, copy locale/keymap/font/time zone configs to ISO.
 FILE="" 		# File or folder to be copied to /usr/local/bin/
-# archiso/arch/${ARCH}/root-image.fs.sfs name was changed to airootfs.sfs
-#+ in ARCHLINUX_ISO-201308 or earlier.
-# And an md5 checksum file "airootfs.md5" was added/moved to that folder.
 ROOTFS_SFS='airootfs.sfs'		# in archiso/arch/
-ROOTFS_IMG='airootfs.img'   	# inside ROOTFS_SFS
+ROOTFSD=rootfs-$USER  			# temporary rootfs directory
+AIDIR=archISO 		 			# temporary directory
 ISO_LABEL="ARCH_$(date +%Y%m)" 	# to avoid an unpleasant surprise
 ISO_FNAME=''                    # ISO image file name; Set later in the script
 CMDLINE="$0 $@"
@@ -145,23 +147,24 @@ then
 
 	# START -----------------------------------------
 
-	[[ -d "/tmp/archiso-$USER" ]] || sudo mkdir "/tmp/archiso-$USER"
+	# Unpack the chosen architecture files from ISO to ./archiso/
+	[[ -d "/tmp/$AIDIR" ]] || sudo mkdir "/tmp/$AIDIR"
 	(($?)) && exit 1
-	[[ -d "/mnt/rootfs-$USER" ]] || sudo mkdir "/mnt/rootfs-$USER"
-	(( $(echo $(grep "/tmp/archiso-$USER" /etc/mtab)|wc -w) )) || \
-		sudo mount -t iso9660 -o loop "$ISO" "/tmp/archiso-$USER" 2>/dev/null
+	(( $(echo $(grep "/tmp/$AIDIR" /etc/mtab)|wc -w) )) || \
+		sudo mount -t iso9660 -o loop "$ISO" "/tmp/$AIDIR" 2>/dev/null
 	(($?)) && { echo $ISO; echo "Mount error"; exit 2;}
 	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
-	sudo mkdir -p "${path}/archiso/arch/boot"
-	sudo cp -apr /tmp/archiso-$USER/{EFI,isolinux,loader} "${path}/archiso"
-	sudo cp -apr /tmp/archiso-$USER/arch/{${ARCH},pkglist.${ARCH}.txt} "${path}/archiso/arch"
-	sudo cp -apr /tmp/archiso-$USER/arch/boot/{syslinux,${ARCH}} "${path}/archiso/arch/boot/"
-	sudo find /tmp/archiso-$USER/arch/boot/ -maxdepth 1 -type f \
+	mkdir -p "${path}/archiso/arch/boot"
+	cp -apr /tmp/$AIDIR/{EFI,isolinux,loader} "${path}/archiso"
+	cp -apr /tmp/$AIDIR/arch/{${ARCH},pkglist.${ARCH}.txt} "${path}/archiso/arch"
+	cp -apr /tmp/$AIDIR/arch/boot/{syslinux,${ARCH}} "${path}/archiso/arch/boot/"
+	find /tmp/$AIDIR/arch/boot/ -maxdepth 1 -type f \
 		-exec cp -apr '{}' "${path}/archiso/arch/boot" \;
 	sync
-	sudo umount /tmp/archiso-$USER 		# Not needed any longer
-	sudo rm -r /tmp/archiso-$USER
+	sudo umount /tmp/$AIDIR 		# Not needed any longer
+	sudo rm -r /tmp/$AIDIR
 
+	# ----------------
 	echo "Modifying archiso/arch/boot/syslinux/archiso.cfg"
 	echo -e "\tand archiso/loader/entries/archiso-x86_64.conf to log in automatically."
 
@@ -172,51 +175,43 @@ then
 
 	sudo sed -i "s/archisolabel=ARCH_.*$/archisolabel=${ISO_LABEL}/" "$path"/archiso/loader/entries/archiso-x86_64.conf
 
-## "UEFI: Failed to install override security policy" problem solution:
-#	echo "Copying EFI/boot/loader.efi tp EFI/boot/bootx64.efi"
-#	echo -e "\tNever tested. Supposed to remedy"
-#	echo -e "\tthe 'UEFI: Failed to install override security policy' bug."
-#	sudo cp "$path"/archiso/EFI/boot/loader.efi "$path"/archiso/EFI/boot/bootx64.efi
-## --------------------------------------------------------------------
-
+	# ----------------
 	echo "Unsquashing ...archiso/arch/${ARCH}/${ROOTFS_SFS}"
-	echo -e "\tto ${path}/archiso-${ARCH}-rootfs/"
-	echo -e "\tand mounting the resulting ${ROOTFS_IMG} at /mnt/rootfs-${USER}."
+	echo -e "\tto /mnt/$ROOTFSD."
 
-	sudo unsquashfs -d "${path}/archiso-${ARCH}-rootfs" \
-		"${path}/archiso/arch/${ARCH}/${ROOTFS_SFS}"
+	[[ -d "/mnt/$ROOTFSD" ]] && sudo rm -r "/mnt/$ROOTFSD"
+	sudo unsquashfs -d /mnt/$ROOTFSD "${path}/archiso/arch/${ARCH}/${ROOTFS_SFS}"
+	[[ $? -ne 0 ]] && exit
 
-	(( $(echo $(grep /mnt/rootfs-$USER /etc/mtab)|wc -w) )) || \
-		sudo mount "$path/archiso-${ARCH}-rootfs/${ROOTFS_IMG}" /mnt/rootfs-$USER
-
-	echo -e "\nModifying files in /mnt/rootfs-$USER"
+	# ----------------
+	echo -e "\nModifying files in /mnt/$ROOTFSD"
 	echo -e "\tto enable sshd.service at boot."
 	# /usr/lib/systemd/system/sshd.service does exist in arch linux!
 	sudo ln -s /usr/lib/systemd/system/sshd.service \
-		/mnt/rootfs-$USER/etc/systemd/system/multi-user.target.wants/
+		/mnt/$ROOTFSD/etc/systemd/system/multi-user.target.wants/
 
 	echo "Allowing an empty password"
 	echo -e "\tfor ssh'ing into ssh server."
 	# Allow empty passwords for sshd
-	sudo sed -i 's/#PermitEmpty.*/PermitEmptyPasswords yes/;' /mnt/rootfs-$USER/etc/ssh/sshd_config
+	sudo sed -i 's/#PermitEmpty.*/PermitEmptyPasswords yes/;' /mnt/$ROOTFSD/etc/ssh/sshd_config
 
 	echo "Adding an alias to /etc/zshrc (Author's idiosyncrasy):"
 	echo -e "\talias s='systemctl'\n"
 	# Add it as the first line in the zshrc configuration file
-	sudo sed -i "1s/^/alias s='systemctl'\n/" /mnt/rootfs-$USER/etc/zsh/zshrc
+	sudo sed -i "1s/^/alias s='systemctl'\n/" /mnt/$ROOTFSD/etc/zsh/zshrc
 	# Copy locale settings and time zone to ISO
 	if ((CP_LOCALE)); then
 		echo "Copying time zone and locale settings from host to ISO."
 		[[ -f /etc/localtime ]] && \
-			sudo cp -d /etc/localtime /mnt/rootfs-$USER/etc/ && \
+			sudo cp -d /etc/localtime /mnt/$ROOTFSD/etc/ && \
 			echo -e "\tTime zone set ($(readlink -n /etc/localtime))."
 		[[ -f /etc/vconsole.conf ]] && \
-			sudo cp /etc/vconsole.conf /mnt/rootfs-$USER/etc/ && \
+			sudo cp /etc/vconsole.conf /mnt/$ROOTFSD/etc/ && \
 			echo -e "\tvconsole.conf copied:" && \
 			awk -v TABS='\t\t' '{$0=TABS$0; print}' /etc/vconsole.conf
-		sudo cp /etc/locale.* /mnt/rootfs-$USER/etc/ && \
+		sudo cp /etc/locale.* /mnt/$ROOTFSD/etc/ && \
 			echo -e  "\t/etc/locale.* files copied."
-		sudo cp /usr/lib/locale/locale-archive /mnt/rootfs-$USER/usr/lib/locale/ && \
+		sudo cp /usr/lib/locale/locale-archive /mnt/$ROOTFSD/usr/lib/locale/ && \
 			echo -e  "\t/usr/lib/locale/locale-archive copied.\n"
 		# FOR A REASON VIRTUAL MACHINE DOES NOT READ FONT_MAP from /ect/vconsole.conf
 		# This is a work around
@@ -227,16 +222,16 @@ then
 		if [[ -n \$FONT ]]; then\n
 			\t[[ -n \$FONT_MAP ]] && setfont \$FONT -m \$FONT_MAP\n
 		fi\n"
-		cat <(echo -e $SCRIPT) /mnt/rootfs-$USER/etc/zsh/zshrc > zshrc.new && \
-			sudo mv zshrc.new /mnt/rootfs-$USER/etc/zsh/zshrc
+		cat <(echo -e $SCRIPT) /mnt/$ROOTFSD/etc/zsh/zshrc > zshrc.new && \
+			sudo mv zshrc.new /mnt/$ROOTFSD/etc/zsh/zshrc
 	fi
 	# Copy file or folder contents to ISO's /usr/local/bin folder.
 	if [[ -e "$FILE" ]]; then
 		echo -n "Copying ${FILE%/}"
 		[[ -f "$FILE" ]] && echo && \
-			sudo cp "$FILE" /mnt/rootfs-$USER/usr/local/bin/
+			sudo cp "$FILE" /mnt/$ROOTFSD/usr/local/bin/
 		[[ -d "$FILE"  ]] && echo '/*' && \
-			sudo cp "${FILE%/}"/* /mnt/rootfs-$USER/usr/local/bin/ 2>/dev/null
+			sudo cp "${FILE%/}"/* /mnt/$ROOTFSD/usr/local/bin/ 2>/dev/null
 		echo -e "\tinto ISO's /usr/local/bin/ folder.\n"
 	fi
 
@@ -248,26 +243,26 @@ then
 		echo -e "\e[1mScript halted.\e[0m"
 		echo You can re-run it without parameters to create an ISO,
 		echo or with the flag \'-c\' to abandon the task and clean up.
-		echo -e "Root image (file \e[1m${ROOTFS_IMG}\e[0m) mounted on\e[1m /mnt/rootfs-$USER\e[0m"
+		echo -e "Unsquashed and modified root file system on\e[1m /mnt/$ROOTFSD\e[0m"
 		warn_incompatibility $ARCH
 		exit
 	fi
 else	# Assume that BREAK was used in the previous run, and resume the script.
 	 	# Options are ignored if BREAK was used in previous run.
-	echo -e "\n\e[32mFile /mnt/archiso-$USER-params found."
+	echo -e "\n\e[32mFile /mnt/$AIDIR-params found."
 	if (($CLEAN)); then
 		echo -e "The -c flag invoked.\e[0m\n"
 	else
 		echo "Resuming the halted script with previous parameters."
 		echo -e "Ignoring the current parameters.\e[0m"
 	fi
-	source /mnt/archiso-$USER-params 	# Read parameters; Needed for cleanig, too.
+	source /mnt/$AIDIR-params 	# Read parameters; Needed for cleanig, too.
 	sudo rm /mnt/archiso-${USER}-params
 fi
 
 if [[ $CLEAN -eq 0 ]]; then 	# Create a modified iso file
 	# Squash rootfs image back
-	sudo mksquashfs "${path}/archiso-${ARCH}-rootfs/${ROOTFS_IMG}" /tmp/${ROOTFS_SFS}
+    sudo mksquashfs /mnt/$ROOTFSD /tmp/${ROOTFS_SFS}
 	(($?)) && echo 3
 	sudo mv -f /tmp/${ROOTFS_SFS} "${path}/archiso/arch/${ARCH}/${ROOTFS_SFS}"
 	CURDIR="$PWD"
@@ -286,9 +281,6 @@ if [[ $CLEAN -eq 0 ]]; then 	# Create a modified iso file
 		echo -e "if you want to install the image on a USB drive.\n";}
 fi
 echo -n "Cleaning... "
-sudo umount /mnt/rootfs-$USER
-(($?)) && echo Failed to unmount \'/mnt/rootfs-$USER\'
-rm -r "${path}/archiso-${ARCH}-rootfs"
-rm -rf "${path}/archiso" 	# -f required to remove archiso/isolinux/boot.cat
-sudo rm -r /mnt/rootfs-$USER
+sudo rm -rf "${path}/archiso" 	# -f required to remove archiso/isolinux/boot.cat
+sudo rm -r /mnt/$ROOTFSD
 echo "Done."
