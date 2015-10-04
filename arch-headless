@@ -13,7 +13,7 @@
 # v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
 # v1.13 Modifications resulting from the ISO structure change introduced in 201510.
 
-VERSION=1.13 # 2015-10-03, hidded ISO-structure change
+VERSION=1.14 # 2015-10-05
 
 # Checking if system needs to be rebooted -------
 # Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
@@ -29,7 +29,8 @@ fi
 hash unsquashfs 2>/dev/null || { echo "The squashfs-tools package is needed."; exit;}
 hash genisoimage 2>/dev/null || { 	echo -n "'genisoimage' not found."; exit;}
 hash md5sum 2>/dev/null || { echo -n "'md5sum' not found. The coreutils package missing"; exit;}
-hash setfont 2>/dev/null || { echo -n "'The gawk package missing"; exit;}
+hash awk 2>/dev/null || { echo -n "'The gawk package missing"; exit;}
+hash setfont 2>/dev/null || { echo -n "'The kbd package missing"; exit;}
 
 # Checking if run by root -----------------------
 #[[ $EUID -ne 0 ]] && { echo "Run this script as the root." 2>&1; exit 1;}

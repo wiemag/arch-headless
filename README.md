@@ -5,9 +5,9 @@ Install archlinux on your headless machine.
 "arch-headless" is a script that takes an official archlinux installation iso image and modifies it in such a way that during the installation the root user is logged in automatically. The sshd.service starts automatically and root logins are allowed with an empty password.
 
 With version 0.97 unnecessary architecture files are removed from the iso image, and the resulting iso-image file name is changed to show the modified-image architecture.
-Version 1.11 adds time zone and locale configuration.
-Version 1.12 allows adding your own scripts/files to the installation media.
-Version 1.13 works with the new archiso structure (new structure from 201510)
+- Version 1.11 adds time zone and locale configuration.
+- Version 1.12 allows adding your own scripts/files to the installation media.
+- Version 1.13 works with the new archiso structure (new structure from 201510)
 
 APPLICATION
 
