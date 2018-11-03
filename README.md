@@ -35,7 +35,7 @@ There is a PKGBUILD availavble on Arch linux AUR and on https://github/wiemag/PK
 
 DEPENDENCIES
 
-- squachfs-tools (cammands: unsquashfs, mksquashfs)
+- squashfs-tools (cammands: unsquashfs, mksquashfs)
 - cdrkit         (command:  genisoimage)
 - sed            (command:  sed)
 - util-linux     (command:  mount, umount)
