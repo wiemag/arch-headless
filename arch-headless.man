@@ -10,16 +10,18 @@ The main purpose of the \fIarch-headless\fR script is to remaster the standard a
 Run
 .RS
 .B arch-headless.sh
-[\fB\-a\fR\fI 32|64\fR] [\fB-l\fR] [\fB\-f\fR\fI file\fR] [\fB-b\fR] [\fB-c\fR] \fIpath/to/file.iso\fR
+[\fB\-a\fR\fI 64\fR] [\fB-l\fR] [\fB\-f\fR\fI file\fR] [\fB-b\fR] [\fB-c\fR] [\fB-x\fR] \fIpath/to/file.iso\fR
 .RE
 .br
 where
 .RS
 \fIpath/to/installation-file.iso\fR is the official installation ISO file as downloaded form \fIhttps://www.archlinux.org/download\fR.
 .PP
-\fB-a\fR  is the architecture, 32-bit (default) or 64-bit
+\fB-a\fR  is the architecture, 64-bit. The 32-bit architecture is no longer possible/available.
 .PP
 \fB-l\fR  copies time zone and locale files and settings from the host computer into the ISO image being created
+.PP
+\fB-x\fR  uses xz compression instead of gz. (xz takes longer but produces smaller ISO's)
 .PP
 \fB-f\fR \fIfile\fR: The "\fIfile\fR" is a chosen file to be copied to the ISO image or a directory the contents of which will be copied to the ISO image. See the OPTIONS section below for details.
 .PP

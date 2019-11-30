@@ -13,11 +13,11 @@
 # v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
 # v1.13 Modifications resulting from the ISO structure change introduced in 201510.
 
-VERSION=1.14 # 2015-10-05
+VERSION=1.16 # 2019-11-29
 
 # Checking if system needs to be rebooted -------
 # Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
-u=$(uname -r); u=${u%-ARCH}; u=${u/.0-/-}
+u=$(uname -r); u=${u/-arch/.};
 p=$(pacman -Q linux|cut -d" " -f2)
 if [[ $u != $p ]]; then
 	echo -e "Kernel installed: ${p}\nKernel running:   $u"
@@ -45,34 +45,35 @@ function flags() {
 	echo "  arch.iso  path to arch-install-media.iso"
 	echo "            e.g. archlinux-2013.09.01-dual.iso"
 	echo "            or /path/to/archlinux-2013.09.01-dual.iso"
-	echo "  -a 32     create iso for a 32-bit system (default)"
-	echo "  -a 64     create iso for a 64-bit system"
+	echo "  -a 64     create iso for a 64-bit system (default and only)"
+	echo "  -a 32     THIS OPTION IS NO LONGER POSSIBLE/AVAILABLE"
 	echo "  -l        copy locale/keybord/font/time-zone settings from host to ISO"
 	echo "  -f file|folder"
 	echo "            copy file or folder contents into /usr/local/bin folder"
 	echo "  -b        break/halt this script to allow manual modification in chroot"
 	echo "  -c        give up the halted task (-b) and clean the files"
+	echo "  -x        use xz compression for iso instead of gz"
+	echo "            (Don't use it if you do not have to. Takes much longer.)"
 	echo -e "  -v        show the ${0##*/} version number\n"
 }
 function usage() {
-	echo -e "\n\e[1march-headless [ -a 32 | 64 ] [-l] [-f file|folder] [-b] arch.iso | -c | -h | -v\e[0m\n"
+	echo -e "\n\e[1march-headless [-a 64] [-l] [-f file|folder] [-b] [-x] arch.iso | -c | -h | -v\e[0m\n"
 	(( $# )) && flags
 }
 
-
 function basepath () {
-	local PATH p
-	PATH=${1-.}
-	[[ -z ${PATH%%/*} ]] || PATH="$(pwd)/$PATH"
-	while [[ $PATH == */./* ]]; do PATH=${PATH//\/\.\///}; done
-	PATH=${PATH//\/\//\/} 		# Remove //
-	while [[ "$PATH" == *..* ]]; do
-		p=${PATH%%\/\.\.*}; p=${p%/*}
-		PATH=${p}${PATH#*\.\.}
+	local path p
+	path=${1-.}
+	[[ -z ${path%%/*} ]] || path="$(pwd)/$path"
+	while [[ $path == */./* ]]; do path=${path//\/\.\///}; done
+	path=${path//\/\//\/} 		# Remove //
+	while [[ "$path" == *..* ]]; do
+		p=${path%%\/\.\.*}; p=${p%/*}
+		path=${p}${path#*\.\.}
 	done
-	PATH=${PATH%/*} 			# Remove last tier name
-	[[ -z $PATH ]] && PATH='/'
-	echo "$PATH"
+	path=${path%/*} 			# Remove last tier name
+	[[ -z $path ]] && path='/'
+	echo "$path"
 }
 
 function warn_incompatibility () {
@@ -85,7 +86,8 @@ function warn_incompatibility () {
 	fi
 }
 
-ARCH='i686'		# A 32-bit system as the default one.
+#ARCH='i686'	# 32-bit architecture no longer available in offical ISO
+ARCH="x86_64"
 BREAK=0 		# If 1, BREAK/HALT the script
 CLEAN=0 		# If 1, DO NOT RESUME the script and REMOVE FILES instead.
 CP_LOCALE=0 	# If 1, copy locale/keymap/font/time zone configs to ISO.
@@ -100,7 +102,7 @@ CMDLINE="$0 $@"
 # If -b is used, a /mnt/archiso-${USER}-params is created.
 
 # Parse the command line ------------------------
-while getopts  ":a:bclf:hv" flag
+while getopts  ":a:bclf:xhv" flag
 do
     case "$flag" in
 		h) syno; usage 1; exit;;
@@ -115,6 +117,7 @@ do
 			read -p "Ignore this option and continue? (y/N) " Q
 			[ ! "${Q,,}" = 'y' ] && exit
 		   fi;;
+		x) XZ=1;;
 	esac
 done
 
@@ -125,16 +128,6 @@ then
 	ISO="$1"		# Path/name of the official arch installation iso image
 	((${#ISO})) || { usage 1; echo -e "\e[1mMissing parameter.\e[0m"; exit;}
 	if [[ -f "$ISO" ]]; then
-		(($(file -ib "$ISO" |grep -c iso9660))) || {
-			usage
-			echo -e "\e[1m${ISO}\e[0m is not an ISO-type file."
-			[[ -n "$FILE" ]] && {
-				echo The ISO file may be corrupted or the -f option has been misused.
-				echo -e "Do not use wildcards.\n"
-				echo -e "You have run:\n$CMDLINE"
-			}
-			exit
-		}
 		path=$(basepath $ISO) 		# Root (/) based path.
 		ISO=${path}/${ISO##*/} 		# Full path file name.
 	else
@@ -153,7 +146,7 @@ then
 	(($?)) && exit 1
 	(( $(echo $(grep "/tmp/$AIDIR" /etc/mtab)|wc -w) )) || \
 		sudo mount -t iso9660 -o loop "$ISO" "/tmp/$AIDIR" 2>/dev/null
-	(($?)) && { echo $ISO; echo "Mount error"; exit 2;}
+	(($?)) && { echo $ISO; echo /tmp/$AIDIR; echo "Mount error"; exit 2;}
 	echo -e "\nCopying ${ISO##*/}\n\tto ${path}/archiso"
 	mkdir -p "${path}/archiso/arch/boot"
 	cp -apr /tmp/$AIDIR/{EFI,isolinux,loader} "${path}/archiso"
@@ -263,7 +256,8 @@ fi
 
 if [[ $CLEAN -eq 0 ]]; then 	# Create a modified iso file
 	# Squash rootfs image back
-    sudo mksquashfs /mnt/$ROOTFSD /tmp/${ROOTFS_SFS}
+	(($XZ)) && sudo mksquashfs /mnt/$ROOTFSD /tmp/${ROOTFS_SFS} -comp xz ||
+		sudo mksquashfs /mnt/$ROOTFSD /tmp/${ROOTFS_SFS}
 	(($?)) && echo 3
 	sudo mv -f /tmp/${ROOTFS_SFS} "${path}/archiso/arch/${ARCH}/${ROOTFS_SFS}"
 	CURDIR="$PWD"
