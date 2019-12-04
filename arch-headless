@@ -21,7 +21,7 @@ if [[ $u != $p ]]; then
 	echo -e "Mounting not possible.\nYour computer needs to be rebooted."
 	exit
 fi
-exit 111
+
 # Checking missing dependencies -----------------
 hash unsquashfs 2>/dev/null || { echo "The squashfs-tools package is needed."; exit;}
 hash genisoimage 2>/dev/null || { 	echo -n "'genisoimage' not found."; exit;}
