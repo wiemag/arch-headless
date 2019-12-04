@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# by wm/wiemag/dif, original date 2013-09-09, current release 2014-01-31
+# by wm/wiemag/dif, original date 2013-09-09
 #
 # ---==== INSTALL ARCH LINUX ON A HEADLESS SERVER ====-------------------------
 # Remaster arch.iso image so that it starts automatically.
@@ -10,21 +10,18 @@
 # - it is connected to the local network
 # Currently, the official installation media start with the ssh daemon down.
 #
-# v1.06 Kernel release verification corrected for cases like 3.16-1 equal to 3.16.0-1
-# v1.13 Modifications resulting from the ISO structure change introduced in 201510.
-
-VERSION=1.16 # 2019-11-29
+VERSION=1.17 # 2019-12-04
 
 # Checking if system needs to be rebooted -------
-# Necessery if kernel has been updated. Note that e.g. 3.16-1 equals 3.16.0-1.
-u=$(uname -r); u=${u/-arch/.};
+# Necessery if kernel has been updated.
+u=$(uname -r); u=${u/-arch/.arch};
 p=$(pacman -Q linux|cut -d" " -f2)
 if [[ $u != $p ]]; then
 	echo -e "Kernel installed: ${p}\nKernel running:   $u"
 	echo -e "Mounting not possible.\nYour computer needs to be rebooted."
 	exit
 fi
-
+exit 111
 # Checking missing dependencies -----------------
 hash unsquashfs 2>/dev/null || { echo "The squashfs-tools package is needed."; exit;}
 hash genisoimage 2>/dev/null || { 	echo -n "'genisoimage' not found."; exit;}
