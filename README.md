@@ -1,6 +1,19 @@
 Install archlinux on your headless machine.
 -------------------------------------------
 
+This project has come to its end. I am not developing any longer, and there is no need for that, either.
+If you need headless installation media use the excellent Arch Linux package called "archiso".
+At the time of writing this message archiso generates an iso with enabled ssh.
+My advice is, use ssh key:
+- create ssh keys for your root
+- add your root's public key to the ...archiso.path.../root/.ssh/authorized_keys
+- and just in case, create a password for the root on arch iso
+See https://wiki.archlinux.org/index.php/Archiso, including the "Tips and tricks".
+
+The arch-headless package has been removed from Arch Linux AUR.
+
+Obsolete
+---------
 
 "arch-headless" is a script that takes an official archlinux installation iso image and modifies it in such a way that during the installation the root user is logged in automatically. The sshd.service starts automatically and root logins are allowed with an empty password.
 
